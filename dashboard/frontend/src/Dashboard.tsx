@@ -2,6 +2,15 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { DashboardAPI } from "./api";
 import type { LogEntry, WorkflowRunDetail } from "./types";
 import { ui } from "./ui";
+import {
+  styles,
+  initialStyle,
+  initialTheme,
+  selectStyle,
+  selectTheme,
+  type UIStyle,
+  type Theme,
+} from "./appearance";
 import { StatusIcon } from "./workflow-ui";
 import { WorkflowDAG } from "./workflow-dag";
 import { WorkflowJobDetail } from "./workflow-job-detail";
@@ -9,7 +18,6 @@ import { WorkflowJobDetail } from "./workflow-job-detail";
 const api = new DashboardAPI();
 const loadRunLogs = (namespace: string, runName: string) =>
   api.logs(namespace, runName);
-type Theme = "light" | "dark" | "system";
 const age = (value?: string) => {
   if (!value) return "—";
   const seconds = Math.max(
@@ -60,10 +68,8 @@ const NoticeContext = createContext<(message: string) => void>(() => undefined);
 
 export function Dashboard() {
   const [path, setPath] = useState(pathParts());
-  const [theme, setTheme] = useState<Theme>(
-    () =>
-      (localStorage.getItem("kruntimes-dashboard-theme") as Theme) || "system",
-  );
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [style, setStyle] = useState<UIStyle>(initialStyle);
   const [namespaces, setNamespaces] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [token, setToken] = useState("");
@@ -75,10 +81,6 @@ export function Dashboard() {
     addEventListener("popstate", update);
     return () => removeEventListener("popstate", update);
   }, []);
-  useEffect(() => {
-    localStorage.setItem("kruntimes-dashboard-theme", theme);
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
   useEffect(() => {
     api
       .session()
@@ -114,7 +116,7 @@ export function Dashboard() {
       <div
         className={
           workflowDetail
-            ? "min-h-screen bg-[var(--bg)]"
+            ? "min-h-screen"
             : "grid min-h-screen grid-cols-[210px_minmax(0,1fr)] max-md:grid-cols-1"
         }
       >
@@ -123,8 +125,16 @@ export function Dashboard() {
         )}
         <div className="min-w-0">
           <Header
+            style={style}
+            onStyle={(value) => {
+              selectStyle(value);
+              setStyle(value);
+            }}
             theme={theme}
-            onTheme={setTheme}
+            onTheme={(value) => {
+              selectTheme(value);
+              setTheme(value);
+            }}
             connected={connected}
             onDisconnect={async () => {
               await api.disconnect();
@@ -151,7 +161,7 @@ export function Dashboard() {
                 onChange={(event) => setToken(event.target.value)}
                 placeholder="Paste a short-lived Kubernetes bearer token"
               />
-              <button className={ui.button} onClick={connect}>
+              <button className={ui.primaryButton} onClick={connect}>
                 Connect
               </button>
             </section>
@@ -171,23 +181,40 @@ export function Dashboard() {
 }
 
 function Header({
+  style,
+  onStyle,
   theme,
   onTheme,
   connected,
   onDisconnect,
 }: {
+  style: UIStyle;
+  onStyle: (style: UIStyle) => void;
   theme: Theme;
   onTheme: (theme: Theme) => void;
   connected: boolean;
   onDisconnect: () => void;
 }) {
   return (
-    <header className="flex min-h-24 items-center justify-between gap-4 bg-[var(--surface)] px-8 py-3 max-md:px-4">
+    <header className="flex flex-wrap min-h-24 items-center justify-between gap-4 bg-[var(--surface)] px-8 py-3 max-md:px-4">
       <a className="text-lg font-bold text-[var(--text)] no-underline" href="/">
         kruntimes{" "}
         <span className="font-medium text-[var(--link)]">Dashboard</span>
       </a>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
+        <label>
+          Style
+          <select
+            value={style}
+            onChange={(event) => onStyle(event.target.value as UIStyle)}
+          >
+            {styles.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           Theme
           <select
@@ -511,7 +538,7 @@ function RuntimePage({ namespace, name }: { namespace: string; name: string }) {
               {pod.name} · {pod.phase} · runtimed{" "}
               {pod.runtimedReady ? "ready" : "not ready"}
             </summary>
-            <Table headers={["Run", "Phase", "Runtime"]}>
+            <Table embedded headers={["Run", "Phase", "Runtime"]}>
               {(pod.runs || []).map((run) => (
                 <tr key={run.uid}>
                   <td>
@@ -604,7 +631,7 @@ function WorkflowFrame({
 }) {
   const names = Object.keys(detail.spec.jobs).sort();
   return (
-    <main className="grid min-h-screen grid-cols-[300px_minmax(0,1fr)] p-0 max-md:grid-cols-1">
+    <main className="grid min-h-screen grid-cols-[300px_minmax(0,1fr)] p-0 max-lg:grid-cols-1">
       <aside className="grid content-start gap-3 bg-[var(--surface)] px-6 py-7">
         <a
           className="text-[var(--muted)] no-underline transition hover:text-[var(--link)]"
@@ -665,7 +692,7 @@ function WorkflowOverview({
   );
   return (
     <>
-      <header className="flex min-h-[9.25rem] items-start justify-between gap-8 max-md:flex-col max-md:gap-5">
+      <header className="flex flex-wrap min-h-[9.25rem] items-start justify-between gap-8 max-md:flex-col max-md:gap-5">
         <div>
           <p className="m-0 flex items-center gap-3 text-2xl text-[var(--text)]">
             <StatusIcon value={detail.phase} />
@@ -673,7 +700,7 @@ function WorkflowOverview({
           </p>
           {detail.status.message && <p>{detail.status.message}</p>}
         </div>
-        <dl className="ml-auto mt-15 flex max-md:ml-0 max-md:mt-0">
+        <dl className="ml-auto mt-15 flex flex-wrap max-w-full max-md:ml-0 max-md:mt-0">
           <div className="grid min-w-28 gap-1 border-l border-[var(--line)] px-5">
             <dt>Started</dt>
             <dd>{formattedDate(detail.creationTimestamp)}</dd>
@@ -697,7 +724,7 @@ function WorkflowOverview({
           •••
         </button>
       </header>
-      <div className="flex min-h-16 items-center justify-between gap-5 max-md:flex-col max-md:items-stretch">
+      <div className="flex flex-wrap min-h-16 items-center justify-between gap-5 max-md:flex-col max-md:items-stretch">
         <nav className="flex gap-2" aria-label="Workflow views">
           {(["pipeline", "logs", "artifacts"] as const).map((item) => (
             <button
@@ -711,7 +738,7 @@ function WorkflowOverview({
           ))}
         </nav>
         {tab === "pipeline" && (
-          <div className="flex items-center gap-2 max-md:flex-wrap max-md:pb-3">
+          <div className="flex flex-wrap items-center gap-2 max-md:pb-3">
             <label className={ui.searchField}>
               <span aria-hidden="true">⌕</span>
               <input
@@ -836,14 +863,18 @@ function Title({ title, back }: { title: string; back?: string }) {
   );
 }
 function Table({
+  embedded = false,
   headers,
   children,
 }: {
+  embedded?: boolean;
   headers: string[];
   children: React.ReactNode;
 }) {
   return (
-    <section className={`${ui.panel} mx-8 my-4 overflow-x-auto max-md:mx-4`}>
+    <section
+      className={`${ui.panel} ${embedded ? "ui-embedded" : ""} mx-8 my-4 overflow-x-auto max-md:mx-4`}
+    >
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr>

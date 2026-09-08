@@ -311,14 +311,32 @@ scroll horizontally instead of dropping dependency information.
 It should not include mutation buttons until the read-only authorization model
 is proven.
 
-The visual language is neumorphism: a shared material color, upper-left highlights
-and lower-right shadows give panels, DAG groups, and buttons a subtle raised
-surface. Inputs, selected navigation/tabs, pressed buttons, and expanded Steps
-use inset shadows. Light, Dark, and System themes share semantic color and depth
-tokens; System follows the browser's color-scheme preference. Dense table rows,
-status indicators, and log lines stay flat and readable, with visible keyboard
-focus and reduced-motion support. The styling does not change Job routes,
-dependency edges, or automatic log loading when expanding a Step.
+The global Style selector offers Stripe-inspired (default) and Neumorphism,
+independently of the Light, Dark, and System Theme selector. Stripe-inspired uses
+fine borders, light shadows, smaller corners, and restrained purple accents;
+Neumorphism keeps same-material surfaces and raised/inset double shadows.
+Both styles cover resource pages, DAGs, Job Steps, and logs without duplicating
+page components or changing routes, dependencies, or automatic Step log loading.
+Selections are browser-local, saved separately in localStorage, and applied before
+React renders. Invalid style values fall back to Stripe-inspired; invalid themes
+fall back to System. Blocked storage does not prevent in-page switching. System
+follows the browser's color-scheme preference. Dense rows and status indicators
+stay readable, with visible keyboard focus and reduced-motion support.
+Stripe's Dashboard adaptation uses exact light-theme brand colors (`#635bff`,
+`#0a2540`, `#f6f9fc`), a 40px background grid, multi-layer panel shadows, 12px
+panel corners and 8px controls. It keeps compact operational typography rather
+than marketing-page heading sizes and whitespace; prose is capped at 75ch.
+Brand purple remains exact on primary controls; links on tinted surfaces use
+`#554bd6` in light mode for text contrast.
+Connect is a purple primary button; secondary/icon controls retain quiet surfaces.
+Buttons lift 2px on hover and press to 0.98 scale with inset-only shadow, using
+300ms ease-out. Reduced motion disables transforms and transitions. Graph nodes,
+tables and logs never move on hover. Embedded tables stay flat; status badges use
+small corners, while circular status icons and accessible dark-theme colors are
+explicit exceptions to the supplied StyleKit. System fonts replace explicit Inter
+in Stripe only. These are documented adaptations, not literal compliance with
+the contradictory original prompt. No Helm settings or backend API changes are needed. See
+`dashboard/frontend/tests/README.md` for verification and style extension guidance.
 
 The frontend is React and TypeScript, built into static assets packaged beside
 the Dashboard backend in its image and served from the same HTTPS origin as its internal API.

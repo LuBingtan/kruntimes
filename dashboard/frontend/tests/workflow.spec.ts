@@ -1,5 +1,29 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { expectTextContrast } from "./contrast";
+
+test("fresh browser defaults and invalid theme are safe", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.removeItem("kruntimes-dashboard-style");
+    localStorage.setItem("kruntimes-dashboard-theme", "invalid");
+    new MutationObserver(() => {
+      if (
+        document.getElementById("root")?.childElementCount &&
+        !document.documentElement.dataset.firstStyle
+      ) {
+        document.documentElement.dataset.firstStyle =
+          document.documentElement.dataset.style;
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await openWorkflow(page);
+  await expect(page.locator("html")).toHaveAttribute("data-style", "stripe");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-first-style",
+    "stripe",
+  );
+});
 
 async function openWorkflow(page: Page, sharedDependencies = false) {
   // The Go server serves index.html for frontend routes; Vite preview only
@@ -81,6 +105,88 @@ async function renderedDependencies(page: Page) {
   });
 }
 
+test("switching style preserves search and zoom and realigns edges", async ({
+  page,
+}, testInfo) => {
+  await openWorkflow(page);
+  await page.getByLabel("Search jobs").fill("A");
+  await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+  const transform = await page
+    .locator(".dag")
+    .evaluate((node) => getComputedStyle(node).transform);
+  await page
+    .getByRole("combobox", { name: "Style", exact: true })
+    .selectOption(
+      testInfo.project.name === "stripe" ? "neumorphism" : "stripe",
+    );
+  await expect(page.getByLabel("Search jobs")).toHaveValue("A");
+  await expect(page.locator(".dag")).toHaveCSS("transform", transform);
+  await expect.poll(() => renderedDependencies(page)).toEqual(["A->C", "B->D"]);
+});
+
+test("appearance persists independently and survives invalid preferences", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("initialized")) {
+      localStorage.setItem("kruntimes-dashboard-style", "unknown");
+      localStorage.setItem("kruntimes-dashboard-theme", "dark");
+      sessionStorage.setItem("initialized", "yes");
+    }
+  });
+  await openWorkflow(page);
+  await expect(page.locator("html")).toHaveAttribute("data-style", "stripe");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page
+    .getByRole("combobox", { name: "Style", exact: true })
+    .selectOption("neumorphism");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-style",
+    "neumorphism",
+  );
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page
+    .getByRole("combobox", { name: "Theme", exact: true })
+    .selectOption("light");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-style",
+    "neumorphism",
+  );
+});
+
+test("unavailable storage uses defaults without breaking switching", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", {
+      get() {
+        throw new DOMException("Blocked", "SecurityError");
+      },
+    });
+  });
+  await openWorkflow(page);
+  await expect(page.locator("html")).toHaveAttribute("data-style", "stripe");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
+  await page
+    .getByRole("combobox", { name: "Style", exact: true })
+    .selectOption("neumorphism");
+  await page
+    .getByRole("combobox", { name: "Theme", exact: true })
+    .selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-style",
+    "neumorphism",
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-color-scheme",
+    "dark",
+  );
+  expect(errors).toEqual([]);
+});
+
 test("parallel jobs retain distinct dependency relationships", async ({
   page,
 }) => {
@@ -146,10 +252,10 @@ test("Tailwind utilities override global element defaults", async ({
   await expect(page.locator("main")).toHaveCSS("padding", "0px");
 });
 
-test("neumorphic themes, focus and pressed controls", async ({
-  page,
-}, testInfo) => {
+test("themes, focus and pressed controls", async ({ page }, testInfo) => {
   await openWorkflow(page);
+  const neumorphic = testInfo.project.name === "neumorphism";
+  const depth = neumorphic ? /inset/ : "none";
   const theme = page.getByRole("combobox", { name: "Theme", exact: true });
   const zoom = page.getByRole("button", { name: "Zoom in", exact: true });
   for (const mode of ["light", "dark"]) {
@@ -157,7 +263,13 @@ test("neumorphic themes, focus and pressed controls", async ({
     await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
     await expect(zoom).toHaveCSS(
       "color",
-      mode === "light" ? "rgb(36, 52, 72)" : "rgb(237, 242, 247)",
+      neumorphic
+        ? mode === "light"
+          ? "rgb(36, 52, 72)"
+          : "rgb(237, 242, 247)"
+        : mode === "light"
+          ? "rgb(10, 37, 64)"
+          : "rgb(237, 240, 247)",
     );
     await expect(page.locator(".dag-stage").first()).not.toHaveCSS(
       "box-shadow",
@@ -165,11 +277,11 @@ test("neumorphic themes, focus and pressed controls", async ({
     );
     await expect(page.getByLabel("Search jobs").locator("..")).toHaveCSS(
       "box-shadow",
-      /inset/,
+      neumorphic ? /inset/ : /rgba\(0, 0, 0, 0.05\)/,
     );
     await expect(
       page.getByRole("button", { name: "Pipeline", exact: true }),
-    ).toHaveCSS("box-shadow", /inset/);
+    ).toHaveCSS("box-shadow", depth);
     await page.getByRole("button", { name: "Zoom out", exact: true }).focus();
     await page.keyboard.press("Tab");
     await expect(zoom).toBeFocused();
@@ -184,13 +296,33 @@ test("neumorphic themes, focus and pressed controls", async ({
       fullPage: true,
       animations: "disabled",
     });
+    if (!neumorphic) await expectTextContrast(page);
+    for (const width of [390, 768, 1600]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`workflow-${mode}-${width}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
   }
   await theme.selectOption("system");
   for (const mode of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: mode });
     await expect(page.locator("body")).toHaveCSS(
       "background-color",
-      mode === "light" ? "rgb(230, 235, 240)" : "rgb(39, 47, 59)",
+      neumorphic
+        ? mode === "light"
+          ? "rgb(230, 235, 240)"
+          : "rgb(39, 47, 59)"
+        : mode === "light"
+          ? "rgb(246, 249, 252)"
+          : "rgb(21, 26, 37)",
     );
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -200,6 +332,8 @@ test("neumorphic themes, focus and pressed controls", async ({
 test("Job navigation and expanding a recessed Step loads logs", async ({
   page,
 }, testInfo) => {
+  const depth =
+    testInfo.project.name === "neumorphism" ? /inset/ : /rgba\(0, 0, 0, 0.05\)/;
   let logRequests = 0;
   await openWorkflow(page);
   await page.route("**/runs/build-run/logs?*", async (route) => {
@@ -217,7 +351,7 @@ test("Job navigation and expanding a recessed Step loads logs", async ({
   expect(logRequests).toBe(0);
   await page.locator(".step summary").click();
   await expect(page.locator(".log-viewer")).toContainText("Build complete");
-  await expect(page.locator(".step")).toHaveCSS("box-shadow", /inset/);
+  await expect(page.locator(".step")).toHaveCSS("box-shadow", depth);
   expect(logRequests).toBe(1);
   for (const mode of ["light", "dark"]) {
     await page
@@ -228,7 +362,28 @@ test("Job navigation and expanding a recessed Step loads logs", async ({
       fullPage: true,
       animations: "disabled",
     });
+    if (testInfo.project.name === "stripe") await expectTextContrast(page);
+    for (const width of [390, 768, 1600]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`job-${mode}-${width}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
   }
+  await page
+    .getByRole("combobox", { name: "Style", exact: true })
+    .selectOption(
+      testInfo.project.name === "stripe" ? "neumorphism" : "stripe",
+    );
+  await expect(page.locator(".step")).toHaveAttribute("open", "");
+  await expect(page.locator(".log-viewer")).toContainText("Build complete");
   await page.locator(".step summary").click();
   await page.locator(".step summary").click();
   expect(logRequests).toBe(1);

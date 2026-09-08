@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { expectTextContrast } from "./contrast";
 
 test("resource pages share raised surfaces in both themes", async ({
   page,
@@ -93,22 +94,50 @@ test("resource pages share raised surfaces in both themes", async ({
       await page
         .getByRole("combobox", { name: "Theme", exact: true })
         .selectOption(mode);
-      const panel = page.locator("main .neu-raised").first();
+      const panel = page.locator("main .ui-panel").first();
       await expect(panel).toBeVisible();
       await expect(panel).not.toHaveCSS("box-shadow", "none");
       await expect(panel).toHaveCSS(
         "background-color",
-        mode === "light" ? "rgb(230, 235, 240)" : "rgb(39, 47, 59)",
+        testInfo.project.name === "neumorphism"
+          ? mode === "light"
+            ? "rgb(230, 235, 240)"
+            : "rgb(39, 47, 59)"
+          : mode === "light"
+            ? "rgb(255, 255, 255)"
+            : "rgb(32, 39, 55)",
       );
       if (path.endsWith("/runs")) {
         await expect(page.locator(".phase")).toHaveCount(4);
-        await expect(page.locator("aside .neu-selected")).toContainText("Runs");
+        await expect(page.locator("aside .ui-selected")).toContainText("Runs");
+      }
+      if (
+        path.endsWith("/runtimes/bash") &&
+        testInfo.project.name === "stripe"
+      ) {
+        await expect(page.locator(".ui-embedded")).toHaveCSS(
+          "box-shadow",
+          "none",
+        );
+        await expect(page.locator(".ui-embedded")).toHaveCSS(
+          "border-radius",
+          "0px",
+        );
       }
       await page.screenshot({
         path: testInfo.outputPath(`resource-${index}-${mode}.png`),
         fullPage: true,
         animations: "disabled",
       });
+      if (testInfo.project.name === "stripe") await expectTextContrast(page);
+      for (const width of [390, 768, 1600]) {
+        await page.setViewportSize({ width, height: 1000 });
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+      }
     }
   }
   await page.setViewportSize({ width: 390, height: 844 });

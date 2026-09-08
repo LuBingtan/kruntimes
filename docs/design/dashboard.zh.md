@@ -271,12 +271,24 @@ execution DAG 的视图，不能提供 mutation 或 graph-editing controls；在
 
 在只读授权模型被验证之前，不应加入 mutation buttons。
 
-视觉风格采用 neumorphism（新拟态）：以统一材质底色、左上高光和右下暗影，
-让面板、DAG 分组和按钮呈现轻微凸起。输入框、选中的导航／Tab、按下的按钮和
-展开的 Step 使用凹陷阴影。Light、Dark、System 主题共用语义颜色及深度变量；
-System 跟随浏览器的颜色偏好。密集表格行、状态标记和日志行保持平面和清晰可读，
-保留可见的键盘焦点，并支持减少动态效果。样式调整不改变 Job 路由、依赖连线，
-也不改变展开 Step 自动加载日志的行为。
+全局 Style 选择器提供 Stripe-inspired（默认）和 Neumorphism，与 Light、Dark、
+System 的 Theme 选择器相互独立。Stripe-inspired 使用细边框、轻阴影、小圆角及
+克制的紫色强调；Neumorphism 保留同材质表面和凸起／凹陷双阴影。两套风格覆盖
+资源页面、DAG、Job Step 和日志，不复制页面组件，也不改变路由、依赖或自动加载日志。
+两个偏好分别保存在浏览器 localStorage，在 React 渲染前应用。无效风格回退到
+Stripe-inspired，无效主题回退到 System；存储被禁用时仍可在当前页面切换。
+System 跟随浏览器的颜色偏好。密集表格行、状态标记和日志保持清晰可读，保留
+可见键盘焦点及减少动态效果支持。不新增 Helm 配置或后端 API。
+Stripe 的 Dashboard 适配使用精确浅色品牌色（`#635bff`、`#0a2540`、`#f6f9fc`）、
+40px 背景网格、多层面板阴影、12px 面板圆角和 8px 控件圆角。保留紧凑运维排版，
+不照搬营销页大标题与留白；说明正文限制为 75ch。主按钮保持精确品牌紫，浅色模式中
+有底色区域的链接使用 `#554bd6` 保证文字对比度。Connect 使用紫色主按钮，次按钮和
+图标按钮保持弱化表面。按钮 hover 上浮 2px，按下缩放至 0.98 并只保留内阴影，
+统一使用 300ms ease-out；减少动态效果时禁用变换与过渡。DAG、表格、日志不随 hover
+移动。内嵌表格平面化，状态标签使用小圆角；圆形状态图标和可读的暗色配色作为
+StyleKit 的明确例外。仅 Stripe 使用不显式指定 Inter 的系统字体。这些是明确的
+Dashboard 适配，并非宣称逐字符合存在冲突的原始提示词。
+验证和扩展风格的方法见 `dashboard/frontend/tests/README.md`。
 
 frontend 使用 React 和 TypeScript，构建为与 Dashboard backend 一同打包到镜像中的静态 assets，并与内部 API 从
 同一 HTTPS origin 提供。source、backend、process entrypoint 和 image definition 都位于顶层

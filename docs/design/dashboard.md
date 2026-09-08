@@ -311,14 +311,20 @@ scroll horizontally instead of dropping dependency information.
 It should not include mutation buttons until the read-only authorization model
 is proven.
 
-The global Style selector offers Stripe-inspired (default) and Neumorphism,
-independently of the Light, Dark, and System Theme selector. Stripe-inspired uses
-fine borders, light shadows, smaller corners, and restrained purple accents;
-Neumorphism keeps same-material surfaces and raised/inset double shadows.
-Both styles cover resource pages, DAGs, Job Steps, and logs without duplicating
-page components or changing routes, dependencies, or automatic Step log loading.
+The Settings page holds the global Style and Theme selectors, while the left
+navigation provides a direct `/settings` link. Style offers GitHub (default),
+Stripe-inspired, and Neumorphism independently of the Light, Dark, and System
+Theme selector. GitHub
+uses a restrained GitHub Primer Light/Dark operational palette: `#f6f8fa`
+backgrounds, `#1f2328` text, `#d0d7de` borders, blue links/focus, compact 6px
+corners, and a green primary action. It has no decorative grid or hover lift.
+Stripe-inspired uses fine borders, light shadows, smaller corners, and restrained
+purple accents; Neumorphism keeps same-material surfaces and raised/inset double
+shadows. All styles cover resource pages, DAGs, Job Steps, and logs without
+duplicating page components or changing routes, dependencies, or automatic Step
+log loading.
 Selections are browser-local, saved separately in localStorage, and applied before
-React renders. Invalid style values fall back to Stripe-inspired; invalid themes
+React renders. Invalid style values fall back to GitHub; invalid themes
 fall back to System. Blocked storage does not prevent in-page switching. System
 follows the browser's color-scheme preference. Dense rows and status indicators
 stay readable, with visible keyboard focus and reduced-motion support.

@@ -1,13 +1,15 @@
 import "./styles/stripe.css";
 import "./styles/neumorphism.css";
+import "./styles/github.css";
 
 export const styles = [
+  { id: "github", label: "GitHub" },
   { id: "stripe", label: "Stripe-inspired" },
   { id: "neumorphism", label: "Neumorphism" },
 ] as const;
 export type UIStyle = (typeof styles)[number]["id"];
 export type Theme = "light" | "dark" | "system";
-export const defaultStyle: UIStyle = "stripe";
+export const defaultStyle: UIStyle = "github";
 
 function read(key: string): string | null {
   try {

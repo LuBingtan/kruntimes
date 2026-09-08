@@ -5,6 +5,21 @@ import { expectTextContrast } from "./contrast";
 test("resource pages share raised surfaces in both themes", async ({
   page,
 }, testInfo) => {
+  const style = testInfo.project.name;
+  const panelBackground = {
+    github: {
+      light: "rgb(255, 255, 255)",
+      dark: "rgb(22, 27, 34)",
+    },
+    stripe: {
+      light: "rgb(255, 255, 255)",
+      dark: "rgb(32, 39, 55)",
+    },
+    neumorphism: {
+      light: "rgb(230, 235, 240)",
+      dark: "rgb(39, 47, 59)",
+    },
+  } as const;
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const run = {
@@ -81,6 +96,7 @@ test("resource pages share raised surfaces in both themes", async ({
   });
   const paths = [
     "/",
+    "/settings",
     "/about",
     "/namespaces/default/runs",
     "/namespaces/default/runs/build",
@@ -90,30 +106,35 @@ test("resource pages share raised surfaces in both themes", async ({
   ];
   for (const mode of ["light", "dark"]) {
     for (const [index, path] of paths.entries()) {
-      await page.goto(path);
+      await page.goto("/settings");
       await page
         .getByRole("combobox", { name: "Theme", exact: true })
         .selectOption(mode);
+      await page.goto(path);
       const panel = page.locator("main .ui-panel").first();
       await expect(panel).toBeVisible();
       await expect(panel).not.toHaveCSS("box-shadow", "none");
       await expect(panel).toHaveCSS(
         "background-color",
-        testInfo.project.name === "neumorphism"
-          ? mode === "light"
-            ? "rgb(230, 235, 240)"
-            : "rgb(39, 47, 59)"
-          : mode === "light"
-            ? "rgb(255, 255, 255)"
-            : "rgb(32, 39, 55)",
+        panelBackground[style as keyof typeof panelBackground][
+          mode as "light" | "dark"
+        ],
       );
       if (path.endsWith("/runs")) {
         await expect(page.locator(".phase")).toHaveCount(4);
         await expect(page.locator("aside .ui-selected")).toContainText("Runs");
       }
+      if (path === "/settings") {
+        await expect(page.locator("aside .ui-selected")).toContainText(
+          "Settings",
+        );
+        await expect(
+          page.getByRole("combobox", { name: "Style", exact: true }),
+        ).toHaveValue(style);
+      }
       if (
         path.endsWith("/runtimes/bash") &&
-        testInfo.project.name === "stripe"
+        ["stripe", "github"].includes(testInfo.project.name)
       ) {
         await expect(page.locator(".ui-embedded")).toHaveCSS(
           "box-shadow",
@@ -129,7 +150,9 @@ test("resource pages share raised surfaces in both themes", async ({
         fullPage: true,
         animations: "disabled",
       });
-      if (testInfo.project.name === "stripe") await expectTextContrast(page);
+      if (["stripe", "github"].includes(testInfo.project.name)) {
+        await expectTextContrast(page);
+      }
       for (const width of [390, 768, 1600]) {
         await page.setViewportSize({ width, height: 1000 });
         expect(

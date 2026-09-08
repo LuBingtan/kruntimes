@@ -125,23 +125,26 @@ export function Dashboard() {
         )}
         <div className="min-w-0">
           <Header
-            style={style}
-            onStyle={(value) => {
-              selectStyle(value);
-              setStyle(value);
-            }}
-            theme={theme}
-            onTheme={(value) => {
-              selectTheme(value);
-              setTheme(value);
-            }}
             connected={connected}
             onDisconnect={async () => {
               await api.disconnect();
               setConnected(false);
             }}
           />
-          {path[0] === "about" ? (
+          {path[0] === "settings" ? (
+            <Settings
+              style={style}
+              onStyle={(value) => {
+                selectStyle(value);
+                setStyle(value);
+              }}
+              theme={theme}
+              onTheme={(value) => {
+                selectTheme(value);
+                setTheme(value);
+              }}
+            />
+          ) : path[0] === "about" ? (
             <About />
           ) : path[0] !== "namespaces" ? (
             <Home namespaces={namespaces} />
@@ -181,17 +184,9 @@ export function Dashboard() {
 }
 
 function Header({
-  style,
-  onStyle,
-  theme,
-  onTheme,
   connected,
   onDisconnect,
 }: {
-  style: UIStyle;
-  onStyle: (style: UIStyle) => void;
-  theme: Theme;
-  onTheme: (theme: Theme) => void;
   connected: boolean;
   onDisconnect: () => void;
 }) {
@@ -201,37 +196,11 @@ function Header({
         kruntimes{" "}
         <span className="font-medium text-[var(--link)]">Dashboard</span>
       </a>
-      <div className="flex flex-wrap items-center gap-4">
-        <label>
-          Style
-          <select
-            value={style}
-            onChange={(event) => onStyle(event.target.value as UIStyle)}
-          >
-            {styles.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Theme
-          <select
-            value={theme}
-            onChange={(event) => onTheme(event.target.value as Theme)}
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
-        {connected && (
-          <button className={ui.button} onClick={onDisconnect}>
-            Disconnect
-          </button>
-        )}
-      </div>
+      {connected && (
+        <button className={ui.button} onClick={onDisconnect}>
+          Disconnect
+        </button>
+      )}
     </header>
   );
 }
@@ -277,6 +246,9 @@ function Sidebar({
       >
         Workflow Runs
       </a>
+      <a className={navClass("/settings")} href="/settings">
+        Settings
+      </a>
       <a className={navClass("/about")} href="/about">
         About
       </a>
@@ -321,6 +293,56 @@ function About() {
             Read the public kruntimes documentation ↗
           </a>
         </p>
+      </section>
+    </main>
+  );
+}
+function Settings({
+  style,
+  onStyle,
+  theme,
+  onTheme,
+}: {
+  style: UIStyle;
+  onStyle: (style: UIStyle) => void;
+  theme: Theme;
+  onTheme: (theme: Theme) => void;
+}) {
+  return (
+    <main className="mx-auto max-w-[90rem] p-8 max-md:p-4">
+      <section className={`${ui.panel} max-w-2xl p-5`}>
+        <h1>Settings</h1>
+        <p>
+          Appearance preferences are applied immediately and saved in this
+          browser.
+        </p>
+        <div className="mt-6 grid gap-5">
+          <label>
+            Style
+            <select
+              value={style}
+              onChange={(event) => onStyle(event.target.value as UIStyle)}
+            >
+              {styles.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Theme
+            <select
+              value={theme}
+              onChange={(event) => onTheme(event.target.value as Theme)}
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+            <small>System follows your operating system preference.</small>
+          </label>
+        </div>
       </section>
     </main>
   );
@@ -896,7 +918,7 @@ function Table({
 function Phase({ value }: { value: string }) {
   return (
     <span
-      className={`inline-flex rounded-full border border-[var(--line)] px-2 py-0.5 text-xs ${
+      className={`inline-flex border border-[var(--line)] px-2 py-0.5 text-xs ${
         value || "Unknown"
       } phase`}
     >

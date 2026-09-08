@@ -271,12 +271,15 @@ execution DAG 的视图，不能提供 mutation 或 graph-editing controls；在
 
 在只读授权模型被验证之前，不应加入 mutation buttons。
 
-全局 Style 选择器提供 Stripe-inspired（默认）和 Neumorphism，与 Light、Dark、
-System 的 Theme 选择器相互独立。Stripe-inspired 使用细边框、轻阴影、小圆角及
-克制的紫色强调；Neumorphism 保留同材质表面和凸起／凹陷双阴影。两套风格覆盖
+Settings 页面承载全局 Style 和 Theme 选择器，左侧导航提供可直接访问的 `/settings` 链接。
+Style 提供 GitHub（默认）、Stripe-inspired 和 Neumorphism，与 Light、Dark、System 的
+Theme 选择器相互独立。GitHub 使用克制的 GitHub Primer Light/Dark 运维配色：
+`#f6f8fa` 背景、`#1f2328` 文字、`#d0d7de` 边框、蓝色链接与焦点、紧凑的 6px 圆角，
+以及绿色主操作；它不使用装饰性网格和 hover 上浮。Stripe-inspired 使用细边框、轻阴影、
+小圆角及克制的紫色强调；Neumorphism 保留同材质表面和凸起／凹陷双阴影。三套风格覆盖
 资源页面、DAG、Job Step 和日志，不复制页面组件，也不改变路由、依赖或自动加载日志。
 两个偏好分别保存在浏览器 localStorage，在 React 渲染前应用。无效风格回退到
-Stripe-inspired，无效主题回退到 System；存储被禁用时仍可在当前页面切换。
+GitHub，无效主题回退到 System；存储被禁用时仍可在当前页面切换。
 System 跟随浏览器的颜色偏好。密集表格行、状态标记和日志保持清晰可读，保留
 可见键盘焦点及减少动态效果支持。不新增 Helm 配置或后端 API。
 Stripe 的 Dashboard 适配使用精确浅色品牌色（`#635bff`、`#0a2540`、`#f6f9fc`）、

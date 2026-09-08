@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
   outputDir: "/tmp/kruntimes-dashboard-browser-results",
-  projects: ["stripe", "neumorphism"].map((name) => ({
+  projects: ["github", "stripe", "neumorphism"].map((name) => ({
     name,
     use: {
       storageState: {

@@ -17,11 +17,11 @@ test("fresh browser defaults and invalid theme are safe", async ({ page }) => {
     }).observe(document, { childList: true, subtree: true });
   });
   await openWorkflow(page);
-  await expect(page.locator("html")).toHaveAttribute("data-style", "stripe");
+  await expect(page.locator("html")).toHaveAttribute("data-style", "github");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
   await expect(page.locator("html")).toHaveAttribute(
     "data-first-style",
-    "stripe",
+    "github",
   );
 });
 
@@ -39,6 +39,13 @@ async function openWorkflow(page: Page, sharedDependencies = false) {
       });
     },
   );
+  await page.route("**/settings", async (route) => {
+    if (route.request().resourceType() !== "document") return route.fallback();
+    await route.fulfill({
+      contentType: "text/html",
+      body: await readFile("../backend/assets/index.html"),
+    });
+  });
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const json = path.endsWith("/session")
@@ -77,6 +84,25 @@ async function openWorkflow(page: Page, sharedDependencies = false) {
   await page.goto("/namespaces/default/workflowruns/review");
 }
 
+async function changeAppearance(
+  page: Page,
+  appearance: { style?: string; theme?: string },
+) {
+  const returnURL = page.url();
+  await page.goto("/settings");
+  if (appearance.style) {
+    await page
+      .getByRole("combobox", { name: "Style", exact: true })
+      .selectOption(appearance.style);
+  }
+  if (appearance.theme) {
+    await page
+      .getByRole("combobox", { name: "Theme", exact: true })
+      .selectOption(appearance.theme);
+  }
+  await page.goto(returnURL);
+}
+
 // Compare the rendered SVG endpoints with the visible Job rows, in screen
 // coordinates. This catches both lost dependencies and double-applied zoom.
 async function renderedDependencies(page: Page) {
@@ -105,22 +131,13 @@ async function renderedDependencies(page: Page) {
   });
 }
 
-test("switching style preserves search and zoom and realigns edges", async ({
+test("switching style from Settings preserves dependency edges", async ({
   page,
 }, testInfo) => {
   await openWorkflow(page);
-  await page.getByLabel("Search jobs").fill("A");
-  await page.getByRole("button", { name: "Zoom out", exact: true }).click();
-  const transform = await page
-    .locator(".dag")
-    .evaluate((node) => getComputedStyle(node).transform);
-  await page
-    .getByRole("combobox", { name: "Style", exact: true })
-    .selectOption(
-      testInfo.project.name === "stripe" ? "neumorphism" : "stripe",
-    );
-  await expect(page.getByLabel("Search jobs")).toHaveValue("A");
-  await expect(page.locator(".dag")).toHaveCSS("transform", transform);
+  await changeAppearance(page, {
+    style: testInfo.project.name === "github" ? "neumorphism" : "github",
+  });
   await expect.poll(() => renderedDependencies(page)).toEqual(["A->C", "B->D"]);
 });
 
@@ -135,20 +152,16 @@ test("appearance persists independently and survives invalid preferences", async
     }
   });
   await openWorkflow(page);
-  await expect(page.locator("html")).toHaveAttribute("data-style", "stripe");
+  await expect(page.locator("html")).toHaveAttribute("data-style", "github");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page
-    .getByRole("combobox", { name: "Style", exact: true })
-    .selectOption("neumorphism");
+  await changeAppearance(page, { style: "neumorphism" });
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute(
     "data-style",
     "neumorphism",
   );
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page
-    .getByRole("combobox", { name: "Theme", exact: true })
-    .selectOption("light");
+  await changeAppearance(page, { theme: "light" });
   await expect(page.locator("html")).toHaveAttribute(
     "data-style",
     "neumorphism",
@@ -168,14 +181,9 @@ test("unavailable storage uses defaults without breaking switching", async ({
     });
   });
   await openWorkflow(page);
-  await expect(page.locator("html")).toHaveAttribute("data-style", "stripe");
+  await expect(page.locator("html")).toHaveAttribute("data-style", "github");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
-  await page
-    .getByRole("combobox", { name: "Style", exact: true })
-    .selectOption("neumorphism");
-  await page
-    .getByRole("combobox", { name: "Theme", exact: true })
-    .selectOption("dark");
+  await changeAppearance(page, { style: "neumorphism", theme: "dark" });
   await expect(page.locator("html")).toHaveAttribute(
     "data-style",
     "neumorphism",
@@ -255,11 +263,11 @@ test("Tailwind utilities override global element defaults", async ({
 test("themes, focus and pressed controls", async ({ page }, testInfo) => {
   await openWorkflow(page);
   const neumorphic = testInfo.project.name === "neumorphism";
-  const depth = neumorphic ? /inset/ : "none";
-  const theme = page.getByRole("combobox", { name: "Theme", exact: true });
+  const github = testInfo.project.name === "github";
+  const depth = neumorphic ? /inset/ : github ? /1px/ : "none";
   const zoom = page.getByRole("button", { name: "Zoom in", exact: true });
   for (const mode of ["light", "dark"]) {
-    await theme.selectOption(mode);
+    await changeAppearance(page, { theme: mode });
     await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
     await expect(zoom).toHaveCSS(
       "color",
@@ -267,9 +275,13 @@ test("themes, focus and pressed controls", async ({ page }, testInfo) => {
         ? mode === "light"
           ? "rgb(36, 52, 72)"
           : "rgb(237, 242, 247)"
-        : mode === "light"
-          ? "rgb(10, 37, 64)"
-          : "rgb(237, 240, 247)",
+        : github
+          ? mode === "light"
+            ? "rgb(31, 35, 40)"
+            : "rgb(201, 209, 217)"
+          : mode === "light"
+            ? "rgb(10, 37, 64)"
+            : "rgb(237, 240, 247)",
     );
     await expect(page.locator(".dag-stage").first()).not.toHaveCSS(
       "box-shadow",
@@ -277,7 +289,7 @@ test("themes, focus and pressed controls", async ({ page }, testInfo) => {
     );
     await expect(page.getByLabel("Search jobs").locator("..")).toHaveCSS(
       "box-shadow",
-      neumorphic ? /inset/ : /rgba\(0, 0, 0, 0.05\)/,
+      neumorphic ? /inset/ : github ? "none" : /rgba\(0, 0, 0, 0.05\)/,
     );
     await expect(
       page.getByRole("button", { name: "Pipeline", exact: true }),
@@ -288,7 +300,7 @@ test("themes, focus and pressed controls", async ({ page }, testInfo) => {
     await expect(zoom).toHaveCSS("outline-style", "solid");
     await zoom.hover();
     await page.mouse.down();
-    await expect(zoom).toHaveCSS("box-shadow", /inset/);
+    await expect(zoom).toHaveCSS("box-shadow", github ? "none" : /inset/);
     await page.mouse.up();
     await page.getByRole("button", { name: "Fit", exact: true }).click();
     await page.screenshot({
@@ -311,7 +323,7 @@ test("themes, focus and pressed controls", async ({ page }, testInfo) => {
       });
     }
   }
-  await theme.selectOption("system");
+  await changeAppearance(page, { theme: "system" });
   for (const mode of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: mode });
     await expect(page.locator("body")).toHaveCSS(
@@ -320,9 +332,13 @@ test("themes, focus and pressed controls", async ({ page }, testInfo) => {
         ? mode === "light"
           ? "rgb(230, 235, 240)"
           : "rgb(39, 47, 59)"
-        : mode === "light"
-          ? "rgb(246, 249, 252)"
-          : "rgb(21, 26, 37)",
+        : github
+          ? mode === "light"
+            ? "rgb(246, 248, 250)"
+            : "rgb(13, 17, 23)"
+          : mode === "light"
+            ? "rgb(246, 249, 252)"
+            : "rgb(21, 26, 37)",
     );
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -333,7 +349,11 @@ test("Job navigation and expanding a recessed Step loads logs", async ({
   page,
 }, testInfo) => {
   const depth =
-    testInfo.project.name === "neumorphism" ? /inset/ : /rgba\(0, 0, 0, 0.05\)/;
+    testInfo.project.name === "neumorphism"
+      ? /inset/
+      : testInfo.project.name === "github"
+        ? "none"
+        : /rgba\(0, 0, 0, 0.05\)/;
   let logRequests = 0;
   await openWorkflow(page);
   await page.route("**/runs/build-run/logs?*", async (route) => {
@@ -354,15 +374,15 @@ test("Job navigation and expanding a recessed Step loads logs", async ({
   await expect(page.locator(".step")).toHaveCSS("box-shadow", depth);
   expect(logRequests).toBe(1);
   for (const mode of ["light", "dark"]) {
-    await page
-      .getByRole("combobox", { name: "Theme", exact: true })
-      .selectOption(mode);
+    await changeAppearance(page, { theme: mode });
     await page.screenshot({
       path: testInfo.outputPath(`job-${mode}.png`),
       fullPage: true,
       animations: "disabled",
     });
-    if (testInfo.project.name === "stripe") await expectTextContrast(page);
+    if (["stripe", "github"].includes(testInfo.project.name)) {
+      await expectTextContrast(page);
+    }
     for (const width of [390, 768, 1600]) {
       await page.setViewportSize({ width, height: 1000 });
       expect(
@@ -377,14 +397,4 @@ test("Job navigation and expanding a recessed Step loads logs", async ({
       });
     }
   }
-  await page
-    .getByRole("combobox", { name: "Style", exact: true })
-    .selectOption(
-      testInfo.project.name === "stripe" ? "neumorphism" : "stripe",
-    );
-  await expect(page.locator(".step")).toHaveAttribute("open", "");
-  await expect(page.locator(".log-viewer")).toContainText("Build complete");
-  await page.locator(".step summary").click();
-  await page.locator(".step summary").click();
-  expect(logRequests).toBe(1);
 });

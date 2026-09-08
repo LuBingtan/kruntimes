@@ -25,9 +25,11 @@ test("Stripe tokens, button motion, focus and contrast", async ({
   const button = page.getByRole("button", { name: "Connect", exact: true });
   const panel = page.locator("main .ui-panel");
   for (const mode of ["light", "dark"]) {
+    await page.goto("/settings");
     await page
       .getByRole("combobox", { name: "Theme", exact: true })
       .selectOption(mode);
+    await page.goto("/");
     await expect(button).toHaveCSS("background-color", "rgb(99, 91, 255)");
     await expect(button).toHaveCSS("color", "rgb(255, 255, 255)");
     await expect(button).toHaveCSS("padding", "12px 24px");

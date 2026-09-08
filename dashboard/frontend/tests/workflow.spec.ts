@@ -275,6 +275,14 @@ test("Tailwind utilities override global element defaults", async ({
   page,
 }) => {
   await openWorkflow(page);
+  await expect(page.locator(".dag-scroll")).toHaveCSS("font-size", "14px");
+  await expect(page.locator(".dag-stage").first()).toHaveCSS("width", "300px");
+  await expect(
+    page
+      .getByRole("navigation", { name: "Workflow jobs" })
+      .locator("a")
+      .first(),
+  ).toHaveCSS("font-size", "14px");
   await expect(
     page.getByRole("button", { name: "Zoom in", exact: true }),
   ).toHaveCSS("width", "40px");

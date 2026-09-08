@@ -673,15 +673,15 @@ function WorkflowFrame({
     <main className="grid min-h-screen grid-cols-[300px_minmax(0,1fr)] p-0 max-lg:grid-cols-1">
       <aside className="grid content-start gap-3 bg-[var(--surface)] px-6 py-7">
         <a
-          className="text-[var(--muted)] no-underline transition hover:text-[var(--link)]"
+          className="text-sm text-[var(--muted)] no-underline transition hover:text-[var(--link)]"
           href={`/namespaces/${encodeURIComponent(namespace)}/workflowruns`}
         >
           ← Workflows
         </a>
-        <h1 className="mb-0 mt-4 text-2xl">{workflow}</h1>
+        <h1 className="mb-0 mt-4 text-xl">{workflow}</h1>
         <small className="mt-0">{namespace}</small>
         <a
-          className={`${ui.navItem} mt-8 ${selectedJob ? "" : ui.selectedNavItem}`}
+          className={`${ui.navItem} mt-8 text-sm ${selectedJob ? "" : ui.selectedNavItem}`}
           href={workflowURL(namespace, workflow)}
         >
           <span aria-hidden="true">⌂</span> Summary
@@ -692,7 +692,7 @@ function WorkflowFrame({
         <nav aria-label="Workflow jobs" className="grid gap-1">
           {names.map((jobName) => (
             <a
-              className={`${ui.navItem} ${
+              className={`${ui.navItem} text-sm ${
                 jobName === selectedJob ? ui.selectedNavItem : ""
               }`}
               href={workflowJobURL(namespace, workflow, jobName)}
@@ -733,13 +733,13 @@ function WorkflowOverview({
     <>
       <header className="flex flex-wrap min-h-[9.25rem] items-start justify-between gap-8 max-md:flex-col max-md:gap-5">
         <div>
-          <p className="m-0 flex items-center gap-3 text-2xl text-[var(--text)]">
+          <p className="m-0 flex items-center gap-3 text-xl text-[var(--text)]">
             <StatusIcon value={detail.phase} />
             <strong>{workflowStatusLabel(detail.phase)}</strong>
           </p>
           {detail.status.message && <p>{detail.status.message}</p>}
         </div>
-        <dl className="ml-auto mt-15 flex flex-wrap max-w-full max-md:ml-0 max-md:mt-0">
+        <dl className="ml-auto mt-15 flex flex-wrap max-w-full text-sm max-md:ml-0 max-md:mt-0">
           <div className="grid min-w-28 gap-1 border-l border-[var(--line)] px-5">
             <dt>Started</dt>
             <dd>{formattedDate(detail.creationTimestamp)}</dd>

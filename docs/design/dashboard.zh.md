@@ -267,7 +267,8 @@ node 会可见地汇合 incoming edges。每个 row 展示 observed phase，并�
 navigation rail 和可展开的 step list。打开具有 child Run 的 step 时，会自动请求已有的 Run-log endpoint；
 browser 永远不会得到 Pod endpoint 或 Kubernetes credential。graph 和 detail pages 都只是 declared
 execution DAG 的视图，不能提供 mutation 或 graph-editing controls；在窄屏幕上 graph 可以水平滚动，不能
-丢失 dependency information。
+丢失 dependency information。视口支持从非 Job canvas 区域 click-and-drag 向任意方向平移；Job node
+仍是普通链接，同时保留 scrollbar 和 mouse wheel 作为替代操作。
 
 在只读授权模型被验证之前，不应加入 mutation buttons。
 

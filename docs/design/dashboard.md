@@ -306,7 +306,9 @@ a step with a child Run automatically requests the existing Run-log endpoint;
 the browser never receives a Pod endpoint or a Kubernetes credential. The
 graph and detail pages are views of the declared execution DAG, and must not
 offer mutation or graph-editing controls. On narrow viewports the graph may
-scroll horizontally instead of dropping dependency information.
+scroll in either direction instead of dropping dependency information. Its
+viewport supports click-and-drag panning from non-Job canvas areas; Job nodes
+remain ordinary links, and scrollbars and the mouse wheel remain available.
 
 It should not include mutation buttons until the read-only authorization model
 is proven.

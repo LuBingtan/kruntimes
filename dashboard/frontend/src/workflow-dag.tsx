@@ -1,4 +1,10 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type { WorkflowRunDetail } from "./types";
 import { StatusIcon } from "./workflow-ui";
 import { ui } from "./ui";
@@ -53,8 +59,21 @@ export function WorkflowDAG({
   jobURL: (jobName: string) => string;
 }) {
   const canvas = useRef<HTMLDivElement>(null);
+  const scroll = useRef<HTMLDivElement>(null);
   const nodes = useRef(new Map<string, HTMLAnchorElement>());
   const [edges, setEdges] = useState<GraphEdge[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<
+    | {
+        pointerId: number;
+        clientX: number;
+        clientY: number;
+        scrollLeft: number;
+        scrollTop: number;
+        moved: boolean;
+      }
+    | undefined
+  >(undefined);
   const layers = useMemo(() => workflowLayers(detail), [detail]);
   useLayoutEffect(() => {
     const update = () => {
@@ -85,9 +104,57 @@ export function WorkflowDAG({
     for (const node of nodes.current.values()) observer.observe(node);
     return () => observer.disconnect();
   }, [detail, scale]);
+  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    drag.current = undefined;
+    setDragging(false);
+  };
+  const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (
+      event.button !== 0 ||
+      (event.target as Element).closest(".dag-node") ||
+      !scroll.current
+    ) {
+      return;
+    }
+    drag.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      scrollLeft: scroll.current.scrollLeft,
+      scrollTop: scroll.current.scrollTop,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(true);
+  };
+  const moveDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const active = drag.current;
+    if (!active || active.pointerId !== event.pointerId || !scroll.current) {
+      return;
+    }
+    const offsetX = event.clientX - active.clientX;
+    const offsetY = event.clientY - active.clientY;
+    if (!active.moved && Math.hypot(offsetX, offsetY) < 4) return;
+    active.moved = true;
+    event.preventDefault();
+    scroll.current.scrollLeft = active.scrollLeft - offsetX;
+    scroll.current.scrollTop = active.scrollTop - offsetY;
+  };
   return (
     <div className={`${ui.subtlePanel} mt-6 min-h-[33.5rem] overflow-hidden`}>
-      <div className="dag-scroll">
+      <div
+        className="dag-scroll"
+        data-dag-dragging={dragging || undefined}
+        onPointerCancel={endDrag}
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        ref={scroll}
+      >
         <div
           className="dag"
           ref={canvas}

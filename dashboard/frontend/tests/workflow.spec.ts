@@ -243,6 +243,34 @@ test("edges stay attached after zoom and resize", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("DAG canvas pans by dragging without stealing Job clicks", async ({
+  page,
+}) => {
+  await openWorkflow(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const scroll = page.locator(".dag-scroll");
+  await scroll.evaluate((node) => {
+    node.style.height = "240px";
+    node.querySelector<HTMLElement>(".dag")!.style.paddingBottom = "700px";
+  });
+  const box = await scroll.boundingBox();
+  if (!box) throw new Error("DAG viewport is not visible");
+  await page.mouse.move(box.x + 20, box.y + 200);
+  await page.mouse.down();
+  await expect(scroll).toHaveAttribute("data-dag-dragging", "true");
+  await page.mouse.move(box.x - 120, box.y + 80);
+  await page.mouse.up();
+  await expect(scroll).not.toHaveAttribute("data-dag-dragging", "true");
+  await expect
+    .poll(() => scroll.evaluate((node) => node.scrollLeft))
+    .toBeGreaterThan(0);
+  await expect
+    .poll(() => scroll.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(0);
+  await page.locator(".dag-node").filter({ hasText: "A" }).click();
+  await expect(page).toHaveURL(/\/jobs\/A$/);
+});
+
 test("Tailwind utilities override global element defaults", async ({
   page,
 }) => {

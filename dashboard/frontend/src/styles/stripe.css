@@ -60,6 +60,18 @@
 :root[data-style="stripe"] .ui-button:hover:not(:disabled) {
   transform: translateY(-2px);
 }
+:root[data-style="stripe"] .sidebar-icon-shell {
+  color: var(--muted);
+  transition: color 300ms ease-out;
+}
+:root[data-style="stripe"] .ui-selected .sidebar-icon-shell,
+:root[data-style="stripe"] .ui-nav:hover .sidebar-icon-shell {
+  color: var(--link);
+}
+:root[data-style="stripe"] .sidebar-group + .sidebar-group {
+  border-top: 1px solid rgb(99 91 255 / 20%);
+  padding-top: 1rem;
+}
 :root[data-style="stripe"] .ui-primary {
   padding: 12px 24px;
   font-weight: 500;
@@ -99,6 +111,9 @@
 @media (prefers-reduced-motion: reduce) {
   :root[data-style="stripe"]
     :is(.ui-button, .ui-nav, .ui-field, select, textarea) {
+    transition: none;
+  }
+  :root[data-style="stripe"] .sidebar-icon-shell {
     transition: none;
   }
   :root[data-style="stripe"] .ui-button:hover:not(:disabled),

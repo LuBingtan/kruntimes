@@ -14,6 +14,7 @@ import {
 import { StatusIcon } from "./workflow-ui";
 import { WorkflowDAG } from "./workflow-dag";
 import { WorkflowJobDetail } from "./workflow-job-detail";
+import { SidebarIcon } from "./sidebar-icons";
 
 const api = new DashboardAPI();
 const loadRunLogs = (namespace: string, runName: string) =>
@@ -214,44 +215,60 @@ function Sidebar({
   const root = `/namespaces/${encodeURIComponent(namespace)}`;
   const navClass = (path: string) =>
     `${ui.navItem} ${location.pathname.startsWith(path) ? ui.selectedNavItem : ""}`;
+  const resourceNavigation = [
+    { label: "Runs", path: `${root}/runs`, icon: "runs" },
+    { label: "Runtimes", path: `${root}/runtimes`, icon: "runtimes" },
+    {
+      label: "Workflow Runs",
+      path: `${root}/workflowruns`,
+      icon: "workflowruns",
+    },
+  ] as const;
+  const dashboardNavigation = [
+    { label: "Settings", path: "/settings", icon: "settings" },
+    { label: "About", path: "/about", icon: "about" },
+  ] as const;
   return (
-    <aside className="grid content-start gap-4 bg-[var(--surface)] p-5 max-md:grid-cols-2">
-      <strong>Explore</strong>
-      <label>
-        Namespace
-        <select
-          value={namespace}
-          onChange={(event) => {
-            location.assign(
-              `/namespaces/${encodeURIComponent(event.target.value)}/runs`,
-            );
-          }}
-        >
-          {namespaces.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
+    <aside className="sidebar grid content-start gap-4 bg-[var(--surface)] p-5 max-md:grid-cols-2">
+      <section className="sidebar-group max-md:col-span-2">
+        <h2 className="sidebar-group-title">Kruntimes resources</h2>
+        <label>
+          Namespace
+          <select
+            value={namespace}
+            onChange={(event) => {
+              location.assign(
+                `/namespaces/${encodeURIComponent(event.target.value)}/runs`,
+              );
+            }}
+          >
+            {namespaces.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <nav className="sidebar-nav" aria-label="Kruntimes resources">
+          {resourceNavigation.map((item) => (
+            <a className={navClass(item.path)} href={item.path} key={item.path}>
+              <SidebarIcon name={item.icon} />
+              <span>{item.label}</span>
+            </a>
           ))}
-        </select>
-      </label>
-      <a className={navClass(`${root}/runs`)} href={`${root}/runs`}>
-        Runs
-      </a>
-      <a className={navClass(`${root}/runtimes`)} href={`${root}/runtimes`}>
-        Runtimes
-      </a>
-      <a
-        className={navClass(`${root}/workflowruns`)}
-        href={`${root}/workflowruns`}
-      >
-        Workflow Runs
-      </a>
-      <a className={navClass("/settings")} href="/settings">
-        Settings
-      </a>
-      <a className={navClass("/about")} href="/about">
-        About
-      </a>
+        </nav>
+      </section>
+      <section className="sidebar-group max-md:col-span-2">
+        <h2 className="sidebar-group-title">Dashboard</h2>
+        <nav className="sidebar-nav" aria-label="Dashboard">
+          {dashboardNavigation.map((item) => (
+            <a className={navClass(item.path)} href={item.path} key={item.path}>
+              <SidebarIcon name={item.icon} />
+              <span>{item.label}</span>
+            </a>
+          ))}
+        </nav>
+      </section>
     </aside>
   );
 }

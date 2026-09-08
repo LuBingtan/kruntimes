@@ -54,6 +54,20 @@
   font-weight: 600;
 }
 
+:root[data-style="github"] .sidebar-icon-shell {
+  color: var(--muted);
+}
+
+:root[data-style="github"] .ui-selected .sidebar-icon-shell,
+:root[data-style="github"] .ui-nav:hover .sidebar-icon-shell {
+  color: var(--link);
+}
+
+:root[data-style="github"] .sidebar-group + .sidebar-group {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+
 :root[data-style="github"] .ui-button:hover:not(:disabled) {
   background: var(--hover-bg);
   box-shadow: var(--hover-shadow);

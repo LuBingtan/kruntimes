@@ -323,6 +323,11 @@ purple accents; Neumorphism keeps same-material surfaces and raised/inset double
 shadows. All styles cover resource pages, DAGs, Job Steps, and logs without
 duplicating page components or changing routes, dependencies, or automatic Step
 log loading.
+The sidebar groups namespace-scoped Runs, Runtimes, and Workflow Runs under
+`Kruntimes resources`; Settings and About are in the separate `Dashboard` group.
+Each navigation item has a small semantic SVG icon in addition to its text label.
+Icons use the selected style's tokens: GitHub and Stripe-inspired remain flat line
+icons, while Neumorphism uses raised or selected-inset same-material icon shells.
 Selections are browser-local, saved separately in localStorage, and applied before
 React renders. Invalid style values fall back to GitHub; invalid themes
 fall back to System. Blocked storage does not prevent in-page switching. System

@@ -124,6 +124,26 @@ test("resource pages share raised surfaces in both themes", async ({
         await expect(page.locator(".phase")).toHaveCount(4);
         await expect(page.locator("aside .ui-selected")).toContainText("Runs");
       }
+      await expect(page.locator("aside .sidebar-icon")).toHaveCount(5);
+      await expect(
+        page.getByRole("navigation", { name: "Kruntimes resources" }),
+      ).toContainText("Runs");
+      await expect(
+        page.getByRole("navigation", { name: "Kruntimes resources" }),
+      ).toContainText("Runtimes");
+      await expect(
+        page.getByRole("navigation", { name: "Dashboard" }),
+      ).toContainText("Settings");
+      await expect(
+        page.getByRole("navigation", { name: "Dashboard" }),
+      ).toContainText("About");
+      await expect(page.locator("aside [data-icon='runs']")).toBeVisible();
+      await expect(page.locator("aside [data-icon='runtimes']")).toBeVisible();
+      await expect(
+        page.locator("aside [data-icon='workflowruns']"),
+      ).toBeVisible();
+      await expect(page.locator("aside [data-icon='settings']")).toBeVisible();
+      await expect(page.locator("aside [data-icon='about']")).toBeVisible();
       if (path === "/settings") {
         await expect(page.locator("aside .ui-selected")).toContainText(
           "Settings",

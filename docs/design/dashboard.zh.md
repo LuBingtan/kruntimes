@@ -278,6 +278,10 @@ Theme 选择器相互独立。GitHub 使用克制的 GitHub Primer Light/Dark �
 以及绿色主操作；它不使用装饰性网格和 hover 上浮。Stripe-inspired 使用细边框、轻阴影、
 小圆角及克制的紫色强调；Neumorphism 保留同材质表面和凸起／凹陷双阴影。三套风格覆盖
 资源页面、DAG、Job Step 和日志，不复制页面组件，也不改变路由、依赖或自动加载日志。
+侧栏将 namespace-scoped 的 Runs、Runtimes 和 Workflow Runs 归入 `Kruntimes resources`，
+Settings 和 About 归入独立的 `Dashboard` 组。每个导航项在文字标签之外提供小型语义 SVG 图标。
+图标使用当前风格的 token：GitHub 与 Stripe-inspired 保持平面线条图标，Neumorphism 使用凸起
+或选中时凹陷的同材质图标底座。
 两个偏好分别保存在浏览器 localStorage，在 React 渲染前应用。无效风格回退到
 GitHub，无效主题回退到 System；存储被禁用时仍可在当前页面切换。
 System 跟随浏览器的颜色偏好。密集表格行、状态标记和日志保持清晰可读，保留

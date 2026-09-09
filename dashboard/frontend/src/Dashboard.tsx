@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { DashboardAPI } from "./api";
+import { DashboardAPI, type DashboardSession } from "./api";
 import type { LogEntry, WorkflowRunDetail } from "./types";
 import { ui } from "./ui";
 import {
@@ -66,6 +66,16 @@ const workflowStatusLabel = (phase: string) => {
   }
 };
 const NoticeContext = createContext<(message: string) => void>(() => undefined);
+const anonymousSession: DashboardSession = { authenticated: false };
+
+const accountLabel = (accountName: string) => {
+  const serviceAccount = accountName.match(
+    /^system:serviceaccount:([^:]+):([^:]+)$/,
+  );
+  return serviceAccount
+    ? `${serviceAccount[1]}/${serviceAccount[2]}`
+    : accountName;
+};
 
 export function Dashboard() {
   const [path, setPath] = useState(pathParts());
@@ -74,8 +84,10 @@ export function Dashboard() {
   const [namespaces, setNamespaces] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [token, setToken] = useState("");
-  const [connected, setConnected] = useState(false);
-  const [sessionKnown, setSessionKnown] = useState(false);
+  const [session, setSession] = useState<DashboardSession>(anonymousSession);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
   const [notice, setNotice] = useState("");
   useEffect(() => {
     const update = () => setPath(pathParts());
@@ -85,9 +97,8 @@ export function Dashboard() {
   useEffect(() => {
     api
       .session()
-      .then(setConnected)
-      .catch(() => setConnected(false))
-      .finally(() => setSessionKnown(true));
+      .then(setSession)
+      .catch(() => setSession(anonymousSession));
   }, []);
   useEffect(() => {
     api
@@ -97,15 +108,20 @@ export function Dashboard() {
         setError("");
       })
       .catch((cause) => setError((cause as Error).message));
-  }, [connected]);
+  }, [session.authenticated]);
   const connect = async () => {
+    setLoggingIn(true);
+    setLoginError("");
     try {
-      await api.connect(token.trim());
+      const nextSession = await api.connect(token.trim());
       setToken("");
-      setConnected(true);
+      setSession(nextSession);
+      setLoginOpen(false);
       setError("");
     } catch (cause) {
-      setError((cause as Error).message);
+      setLoginError((cause as Error).message);
+    } finally {
+      setLoggingIn(false);
     }
   };
   const namespace =
@@ -126,10 +142,14 @@ export function Dashboard() {
         )}
         <div className="min-w-0">
           <Header
-            connected={connected}
+            session={session}
+            onLogin={() => {
+              setLoginError("");
+              setLoginOpen(true);
+            }}
             onDisconnect={async () => {
               await api.disconnect();
-              setConnected(false);
+              setSession(anonymousSession);
             }}
           />
           {path[0] === "settings" ? (
@@ -152,24 +172,6 @@ export function Dashboard() {
           ) : (
             <Page namespace={namespace} path={path.slice(2)} />
           )}
-          {!connected && sessionKnown && (
-            <section className={`${ui.panel} mx-auto my-4 max-w-[42.5rem] p-5`}>
-              <h2>Connect for protected details and logs</h2>
-              <p>
-                Namespace and Run lists are available without a token. Your
-                Kubernetes token is stored only in an HTTPS-only, HttpOnly
-                session cookie for up to eight hours.
-              </p>
-              <textarea
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                placeholder="Paste a short-lived Kubernetes bearer token"
-              />
-              <button className={ui.primaryButton} onClick={connect}>
-                Connect
-              </button>
-            </section>
-          )}
           {error && (
             <p className="px-8 text-[var(--danger)]" role="alert">
               {error}
@@ -180,15 +182,30 @@ export function Dashboard() {
       {notice && (
         <NoticeDialog message={notice} onDismiss={() => setNotice("")} />
       )}
+      {loginOpen && (
+        <LoginDialog
+          token={token}
+          error={loginError}
+          submitting={loggingIn}
+          onToken={setToken}
+          onSubmit={connect}
+          onDismiss={() => {
+            setLoginOpen(false);
+            setLoginError("");
+          }}
+        />
+      )}
     </NoticeContext.Provider>
   );
 }
 
 function Header({
-  connected,
+  session,
+  onLogin,
   onDisconnect,
 }: {
-  connected: boolean;
+  session: DashboardSession;
+  onLogin: () => void;
   onDisconnect: () => void;
 }) {
   return (
@@ -197,9 +214,23 @@ function Header({
         kruntimes{" "}
         <span className="font-medium text-[var(--link)]">Dashboard</span>
       </a>
-      {connected && (
-        <button className={ui.button} onClick={onDisconnect}>
-          Disconnect
+      {session.authenticated ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="max-w-56 truncate text-sm text-[var(--muted)]"
+            title={session.accountName}
+          >
+            {session.accountName
+              ? accountLabel(session.accountName)
+              : "Authenticated"}
+          </span>
+          <button className={ui.button} onClick={onDisconnect}>
+            Log out
+          </button>
+        </div>
+      ) : (
+        <button className={ui.primaryButton} onClick={onLogin}>
+          Log in
         </button>
       )}
     </header>
@@ -981,6 +1012,69 @@ function NoticeDialog({
         <h2>Request unavailable</h2>
         <p>{message}</p>
         <small>Click anywhere to dismiss.</small>
+      </section>
+    </div>
+  );
+}
+
+function LoginDialog({
+  token,
+  error,
+  submitting,
+  onToken,
+  onSubmit,
+  onDismiss,
+}: {
+  token: string;
+  error: string;
+  submitting: boolean;
+  onToken: (token: string) => void;
+  onSubmit: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="notice-backdrop" role="presentation" onClick={onDismiss}>
+      <section
+        className={`notice ${ui.panel}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="login-title">Log in</h2>
+        <p>
+          Paste a short-lived Kubernetes bearer token to access protected
+          details and logs.
+        </p>
+        <label htmlFor="dashboard-token">Kubernetes bearer token</label>
+        <textarea
+          id="dashboard-token"
+          value={token}
+          onChange={(event) => onToken(event.target.value)}
+          placeholder="Paste token"
+          autoFocus
+        />
+        {error && (
+          <p className="text-[var(--danger)]" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            className={ui.button}
+            onClick={onDismiss}
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+          <button
+            className={ui.primaryButton}
+            onClick={onSubmit}
+            disabled={submitting || !token.trim()}
+          >
+            {submitting ? "Logging in…" : "Log in"}
+          </button>
+        </div>
       </section>
     </div>
   );

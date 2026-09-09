@@ -41,6 +41,10 @@ type RequestClientProvider interface {
 // Server exposes the Dashboard's internal, read-only HTTP API.
 type Server struct {
 	Clients RequestClientProvider
+	// Authenticator validates login credentials with Kubernetes TokenReview.
+	// It is separate from Clients because TokenReview must run as the Dashboard
+	// ServiceAccount, while resource requests run as the logged-in user.
+	Authenticator TokenAuthenticator
 	// PublicReadClient is intentionally optional. When configured it serves the
 	// safe namespace and Run list endpoints, and resolves a Run's assigned Pod
 	// for unauthenticated list requests. Reading logs always requires the
@@ -145,7 +149,8 @@ type sessionRequest struct {
 }
 
 type sessionResponse struct {
-	Authenticated bool `json:"authenticated"`
+	Authenticated bool   `json:"authenticated"`
+	AccountName   string `json:"accountName,omitempty"`
 }
 
 func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -178,8 +183,22 @@ func (s *Server) registerRoutes() {
 }
 
 func (s *Server) getSession(writer http.ResponseWriter, request *http.Request) {
-	_, err := request.Cookie(SessionCookieName)
-	s.writeJSON(writer, http.StatusOK, sessionResponse{Authenticated: err == nil})
+	cookie, err := request.Cookie(SessionCookieName)
+	if err != nil || cookie.Value == "" {
+		s.writeJSON(writer, http.StatusOK, sessionResponse{})
+		return
+	}
+	accountName, err := s.authenticate(request, cookie.Value)
+	if errors.Is(err, ErrInvalidBearerToken) {
+		s.clearSessionCookie(writer)
+		s.writeJSON(writer, http.StatusOK, sessionResponse{})
+		return
+	}
+	if err != nil {
+		s.writeError(writer, http.StatusServiceUnavailable, "verify Dashboard session")
+		return
+	}
+	s.writeJSON(writer, http.StatusOK, sessionResponse{Authenticated: true, AccountName: accountName})
 }
 
 func (s *Server) createSession(writer http.ResponseWriter, request *http.Request) {
@@ -189,13 +208,33 @@ func (s *Server) createSession(writer http.ResponseWriter, request *http.Request
 		s.writeError(writer, http.StatusBadRequest, "a Kubernetes bearer token is required")
 		return
 	}
+	accountName, err := s.authenticate(request, strings.TrimSpace(body.Token))
+	if errors.Is(err, ErrInvalidBearerToken) {
+		s.writeError(writer, http.StatusUnauthorized, "Kubernetes bearer token is invalid")
+		return
+	}
+	if err != nil {
+		s.writeError(writer, http.StatusServiceUnavailable, "verify Kubernetes bearer token")
+		return
+	}
 	http.SetCookie(writer, &http.Cookie{Name: SessionCookieName, Value: strings.TrimSpace(body.Token), Path: "/", MaxAge: 8 * 60 * 60, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
-	s.writeJSON(writer, http.StatusNoContent, nil)
+	s.writeJSON(writer, http.StatusOK, sessionResponse{Authenticated: true, AccountName: accountName})
 }
 
 func (s *Server) deleteSession(writer http.ResponseWriter, _ *http.Request) {
-	http.SetCookie(writer, &http.Cookie{Name: SessionCookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	s.clearSessionCookie(writer)
 	writer.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) authenticate(request *http.Request, token string) (string, error) {
+	if s.Authenticator == nil {
+		return "", errors.New("dashboard TokenReview authenticator is not configured")
+	}
+	return s.Authenticator.Authenticate(request.Context(), token)
+}
+
+func (s *Server) clearSessionCookie(writer http.ResponseWriter) {
+	http.SetCookie(writer, &http.Cookie{Name: SessionCookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 }
 
 func (s *Server) serveFrontend(writer http.ResponseWriter, request *http.Request) {

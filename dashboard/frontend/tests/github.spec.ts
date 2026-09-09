@@ -23,9 +23,6 @@ test("GitHub tokens, restrained controls, focus, and dark Primer palette", async
     });
   });
   await page.goto("/");
-  const button = page.getByRole("button", { name: "Connect", exact: true });
-  const panel = page.locator("main .ui-panel");
-  const textarea = page.locator("textarea");
 
   await expect(page.locator("html")).toHaveAttribute("data-style", "github");
   await expect(page.locator("body")).toHaveCSS("background-image", "none");
@@ -46,6 +43,11 @@ test("GitHub tokens, restrained controls, focus, and dark Primer palette", async
       .getByRole("combobox", { name: "Theme", exact: true })
       .selectOption(mode);
     await page.goto("/");
+    await page.getByRole("button", { name: "Log in", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Log in" });
+    const button = dialog.getByRole("button", { name: "Log in", exact: true });
+    const panel = dialog.locator("section");
+    const textarea = dialog.locator("textarea");
     await expect(page.locator("body")).toHaveCSS(
       "background-color",
       colors.background,
@@ -69,6 +71,9 @@ test("GitHub tokens, restrained controls, focus, and dark Primer palette", async
     await expectTextContrast(page);
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
+  const button = page
+    .getByRole("dialog", { name: "Log in" })
+    .getByRole("button", { name: "Log in", exact: true });
   await button.hover();
   await expect(button).toHaveCSS("transition-duration", "0s");
   await expect(button).toHaveCSS("transform", "none");

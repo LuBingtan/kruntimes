@@ -22,14 +22,16 @@ test("Stripe tokens, button motion, focus and contrast", async ({
     });
   });
   await page.goto("/");
-  const button = page.getByRole("button", { name: "Connect", exact: true });
-  const panel = page.locator("main .ui-panel");
   for (const mode of ["light", "dark"]) {
     await page.goto("/settings");
     await page
       .getByRole("combobox", { name: "Theme", exact: true })
       .selectOption(mode);
     await page.goto("/");
+    await page.getByRole("button", { name: "Log in", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Log in" });
+    const button = dialog.getByRole("button", { name: "Log in", exact: true });
+    const panel = dialog.locator("section");
     await expect(button).toHaveCSS("background-color", "rgb(99, 91, 255)");
     await expect(button).toHaveCSS("color", "rgb(255, 255, 255)");
     await expect(button).toHaveCSS("padding", "12px 24px");
@@ -79,6 +81,9 @@ test("Stripe tokens, button motion, focus and contrast", async ({
     }
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
+  const button = page
+    .getByRole("dialog", { name: "Log in" })
+    .getByRole("button", { name: "Log in", exact: true });
   await button.hover();
   await expect(button).toHaveCSS("transform", "none");
   await expect(button).toHaveCSS("transition-duration", "0s");

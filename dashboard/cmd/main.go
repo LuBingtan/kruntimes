@@ -47,13 +47,19 @@ func main() {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
-	factory, err := dashboard.NewRequestClientFactory(ctrl.GetConfigOrDie(), scheme)
+	config := ctrl.GetConfigOrDie()
+	factory, err := dashboard.NewRequestClientFactory(config, scheme)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "configure Dashboard Kubernetes client: %v\n", err)
 		os.Exit(1)
 	}
 
-	dashboardServer := &dashboard.Server{Clients: factory, Assets: os.DirFS(assetsDirectory)}
+	authenticator, err := dashboard.NewTokenReviewAuthenticator(config)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "configure Dashboard TokenReview client: %v\n", err)
+		os.Exit(1)
+	}
+	dashboardServer := &dashboard.Server{Clients: factory, Authenticator: authenticator, Assets: os.DirFS(assetsDirectory)}
 	if gatewayURL != "" {
 		gateway, err := dashboard.NewHTTPRunLogGateway(gatewayURL, gatewayCAFile)
 		if err != nil {
@@ -63,7 +69,7 @@ func main() {
 		dashboardServer.Gateway = gateway
 	}
 	if publicRead {
-		publicClient, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: scheme})
+		publicClient, err := client.New(config, client.Options{Scheme: scheme})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "configure Dashboard public-read client: %v\n", err)
 			os.Exit(1)

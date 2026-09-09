@@ -8,6 +8,11 @@ import type {
   WorkflowRunSummary,
 } from "./types";
 
+export type DashboardSession = {
+  authenticated: boolean;
+  accountName?: string;
+};
+
 export class DashboardAPI {
   private async request(
     path: string,
@@ -31,19 +36,19 @@ export class DashboardAPI {
     return response;
   }
 
-  async connect(token: string): Promise<void> {
-    await this.request("/api/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-    });
+  async connect(token: string): Promise<DashboardSession> {
+    return (await (
+      await this.request("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      })
+    ).json()) as DashboardSession;
   }
-  async session(): Promise<boolean> {
-    return (
-      (await (await this.request("/api/session")).json()) as {
-        authenticated: boolean;
-      }
-    ).authenticated;
+  async session(): Promise<DashboardSession> {
+    return (await (
+      await this.request("/api/session")
+    ).json()) as DashboardSession;
   }
   async disconnect(): Promise<void> {
     await this.request("/api/session", { method: "DELETE" });

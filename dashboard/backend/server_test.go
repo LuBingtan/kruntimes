@@ -30,6 +30,20 @@ type staticRequestClients struct {
 	err    error
 }
 
+type staticTokenAuthenticator struct {
+	accountName string
+	err         error
+	token       string
+}
+
+func (a *staticTokenAuthenticator) Authenticate(_ context.Context, token string) (string, error) {
+	a.token = token
+	if a.err != nil {
+		return "", a.err
+	}
+	return a.accountName, nil
+}
+
 func (s staticRequestClients) ClientForRequest(*http.Request) (client.Client, error) {
 	return s.client, s.err
 }
@@ -279,8 +293,13 @@ func TestServerCreatesAndClearsHTTPSessionCookie(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/session", strings.NewReader(`{"token":"caller-token"}`))
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
-	if response.Code != http.StatusNoContent {
+	if response.Code != http.StatusOK {
 		t.Fatalf("create session status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var session sessionResponse
+	decodeDashboardResponse(t, response, &session)
+	if !session.Authenticated || session.AccountName != "system:serviceaccount:team-a:viewer" {
+		t.Fatalf("create session = %#v", session)
 	}
 	cookies := response.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != SessionCookieName || !cookies[0].HttpOnly || !cookies[0].Secure || cookies[0].SameSite != http.SameSiteStrictMode {
@@ -290,9 +309,8 @@ func TestServerCreatesAndClearsHTTPSessionCookie(t *testing.T) {
 	request.AddCookie(cookies[0])
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, request)
-	var session sessionResponse
 	decodeDashboardResponse(t, response, &session)
-	if !session.Authenticated {
+	if !session.Authenticated || session.AccountName != "system:serviceaccount:team-a:viewer" {
 		t.Fatalf("session = %#v, want authenticated", session)
 	}
 	response = requestDashboard(t, server, http.MethodGet, "/api/session", nil)
@@ -303,6 +321,33 @@ func TestServerCreatesAndClearsHTTPSessionCookie(t *testing.T) {
 	response = requestDashboard(t, server, http.MethodDelete, "/api/session", nil)
 	if response.Code != http.StatusNoContent || response.Result().Cookies()[0].MaxAge >= 0 {
 		t.Fatalf("clear session response = %d, cookies = %#v", response.Code, response.Result().Cookies())
+	}
+}
+
+func TestServerRejectsInvalidSessionTokenAndClearsExpiredSession(t *testing.T) {
+	server := dashboardTestServer(t)
+	authenticator := server.Authenticator.(*staticTokenAuthenticator)
+	authenticator.err = ErrInvalidBearerToken
+	response := requestDashboard(t, server, http.MethodPost, "/api/session", http.Header{"Content-Type": {"application/json"}})
+	// A request with no body is malformed before it reaches TokenReview.
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("missing token status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/session", strings.NewReader(`{"token":"invalid-token"}`))
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid token status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/session", nil)
+	request.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "expired-token"})
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	var session sessionResponse
+	decodeDashboardResponse(t, response, &session)
+	if session.Authenticated || len(response.Result().Cookies()) != 1 || response.Result().Cookies()[0].MaxAge >= 0 {
+		t.Fatalf("expired session = %#v, cookies = %#v", session, response.Result().Cookies())
 	}
 }
 
@@ -402,7 +447,7 @@ func dashboardTestServerWithClients(t *testing.T, clients *staticRequestClients,
 		scheme := dashboardScheme(t)
 		clients.client = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 	}
-	return &Server{Clients: clients, Gateway: &staticGateway{body: `{"items":[]}`}, Assets: fstest.MapFS{
+	return &Server{Clients: clients, Authenticator: &staticTokenAuthenticator{accountName: "system:serviceaccount:team-a:viewer"}, Gateway: &staticGateway{body: `{"items":[]}`}, Assets: fstest.MapFS{
 		"index.html":    &fstest.MapFile{Data: []byte("<div id=\"root\"></div>")},
 		"dashboard.js":  &fstest.MapFile{Data: []byte("createRoot(document.getElementById('root'))")},
 		"dashboard.css": &fstest.MapFile{Data: []byte("body { margin: 0; }")},

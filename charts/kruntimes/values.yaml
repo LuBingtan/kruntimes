@@ -98,6 +98,65 @@ gateway:
     certificateKey: tls.crt
     privateKeyKey: tls.key
     caBundleKey: ca.crt
+    # Optional Secret holding the CA that signs Kubernetes user client
+    # certificates. When set, the HTTPS Gateway accepts a verified client
+    # certificate and authorizes its CN/O with a SubjectAccessReview.
+    clientCASecretName: ""
+    clientCAKey: ca.crt
+    certManager:
+      enabled: false
+      issuerRef:
+        name: ""
+        kind: Issuer
+        group: cert-manager.io
+  podAnnotations: {}
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    capabilities:
+      drop:
+        - ALL
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+dashboard:
+  enabled: false
+  image: ghcr.io/kruntimes/dashboard
+  imagePullPolicy: IfNotPresent
+  replicas: 2
+  bindAddress: ":8443"
+  servicePort: 443
+  containerPort: 8443
+  publicRead:
+    # When enabled, the Dashboard ServiceAccount may list namespaces, Runs,
+    # Runtimes, and WorkflowRuns without a user token. Details require a caller
+    # Kubernetes bearer token. Log access requires get permission on the Run;
+    # the Dashboard relays it through the Runtime Gateway, so callers do not
+    # need pods/log permission.
+    enabled: true
+  tls:
+    # Certificate sources are mutually exclusive. With selfSigned enabled, the
+    # chart generates this Secret (or preserves it across upgrades). To mount
+    # an existing Secret, set selfSigned=false, certManager.enabled=false, and
+    # secretName to that Secret. cert-manager writes the same target Secret.
+    secretName: ""
+    certificateKey: tls.crt
+    privateKeyKey: tls.key
+    selfSigned: true
     certManager:
       enabled: false
       issuerRef:

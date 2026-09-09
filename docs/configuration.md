@@ -25,6 +25,90 @@ helm template kruntimes ./charts/kruntimes --namespace kruntimes-system
 Contributor-only Make variables and chart validation commands are documented in
 the [Development Guide](development.md) and [Testing Guide](testing.md).
 
+## Dashboard TLS
+
+The Dashboard is an opt-in component of the `kruntimes` chart and exposes
+HTTPS only. Enable it with the default chart-generated certificate for local or
+explicitly trusted deployments:
+
+```yaml
+dashboard:
+  enabled: true
+```
+
+To mount an existing TLS Secret, select that source explicitly:
+
+```yaml
+dashboard:
+  enabled: true
+  tls:
+    selfSigned: false
+    secretName: dashboard-tls
+```
+
+To have cert-manager issue the certificate, disable chart generation and
+reference an existing Issuer or ClusterIssuer. The issuer may itself be a
+self-signed cert-manager issuer.
+
+```yaml
+dashboard:
+  enabled: true
+  tls:
+    selfSigned: false
+    secretName: dashboard-tls
+    certManager:
+      enabled: true
+      issuerRef:
+        name: platform-ca
+        kind: ClusterIssuer
+```
+
+`selfSigned`, an existing Secret, and `certManager.enabled` are mutually
+exclusive choices. The Service is always `ClusterIP`; configure ingress or
+other external exposure separately.
+
+## Gateway client-certificate authentication
+
+The Runtime Gateway always accepts Kubernetes bearer tokens. To additionally
+allow `krt logs` to use a kubeconfig client certificate, enable Gateway HTTPS
+and provide the Secret key containing the CA that signs Kubernetes user
+certificates:
+
+```yaml
+gateway:
+  enabled: true
+  protocols:
+    - https
+  tls:
+    clientCASecretName: kubernetes-user-client-ca
+    clientCAKey: ca.crt
+```
+
+The Gateway requests a client certificate but does not require one, so bearer
+tokens continue to work. A presented certificate must verify against this CA;
+its X.509 CN becomes the Kubernetes username and its O values become groups
+for the exact-Run SubjectAccessReview. This is distinct from the Gateway server
+certificate and should normally be a separately managed Secret.
+
+### Public resource lists
+
+When the Dashboard is enabled, namespace, Run, Runtime, and WorkflowRun
+*lists* are available without a token by default. This is controlled by
+`dashboard.publicRead.enabled`; set it to `false` to require a bearer token for
+every API request:
+
+```yaml
+dashboard:
+  publicRead:
+    enabled: false
+```
+
+The chart grants the Dashboard ServiceAccount only `get`/`list` on
+`namespaces`, `runs`, `runtimes`, and `workflowruns`. Their details require the
+caller's bearer token. Log requests are authorized by the Runtime Gateway
+against the exact Run, so the caller needs `get` on that `runs` resource,
+not `pods/log`.
+
 ## Runtime Capacity
 
 Runtime capacity is declared on the Runtime CRD:

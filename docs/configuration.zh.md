@@ -27,6 +27,81 @@ helm template kruntimes ./charts/kruntimes --namespace kruntimes-system
 仅贡献者使用的 Make variables 和 chart validation commands 见
 [Development Guide](development.md) 和 [Testing Guide](testing.md)。
 
+## Dashboard TLS
+
+Dashboard 是 `kruntimes` chart 的 opt-in 组件，并且只暴露 HTTPS。对于本地开发或明确受信任的
+部署，以下配置会启用 chart 生成的默认 certificate：
+
+```yaml
+dashboard:
+  enabled: true
+```
+
+要挂载已有 TLS Secret，需要显式选择该来源：
+
+```yaml
+dashboard:
+  enabled: true
+  tls:
+    selfSigned: false
+    secretName: dashboard-tls
+```
+
+要由 cert-manager 签发 certificate，关闭 chart 生成并引用已有 Issuer 或 ClusterIssuer。该
+issuer 本身可以是 cert-manager 的 self-signed issuer。
+
+```yaml
+dashboard:
+  enabled: true
+  tls:
+    selfSigned: false
+    secretName: dashboard-tls
+    certManager:
+      enabled: true
+      issuerRef:
+        name: platform-ca
+        kind: ClusterIssuer
+```
+
+`selfSigned`、已有 Secret 和 `certManager.enabled` 是互斥选择。Service 始终为 `ClusterIP`；
+ingress 或其它对外暴露需要单独配置。
+
+## Gateway client-certificate authentication
+
+Runtime Gateway 始终接受 Kubernetes bearer tokens。要让 `krt logs` 也能使用 kubeconfig
+client certificate，启用 Gateway HTTPS，并提供包含签发 Kubernetes user certificate 的 CA 的
+Secret key：
+
+```yaml
+gateway:
+  enabled: true
+  protocols:
+    - https
+  tls:
+    clientCASecretName: kubernetes-user-client-ca
+    clientCAKey: ca.crt
+```
+
+Gateway 请求 client certificate，但不强制要求它，因此 bearer tokens 仍可工作。提供的
+certificate 必须由该 CA 验证；其 X.509 CN 会成为 Kubernetes username，O values 会成为用于
+exact-Run SubjectAccessReview 的 groups。这与 Gateway server certificate 不同，通常应由单独管理
+的 Secret 提供。
+
+### 公开资源列表
+
+启用 Dashboard 时，namespace、Run、Runtime 和 WorkflowRun **列表**默认无需 token 即可查看。
+该行为由 `dashboard.publicRead.enabled` 控制；设置为 `false` 后，所有 API 请求都需要 bearer token：
+
+```yaml
+dashboard:
+  publicRead:
+    enabled: false
+```
+
+chart 只给 Dashboard ServiceAccount 授予 `namespaces`、`runs`、`runtimes` 和 `workflowruns` 的
+`get`/`list` 权限。它们的详情仍必须使用 caller 的 bearer token。日志请求由 Runtime Gateway
+针对 exact Run 授权，因此 caller 需要该 `runs` resource 的 `get`，而不需要 `pods/log`。
+
 ## Runtime Capacity
 
 Runtime capacity 在 Runtime CRD 中声明：

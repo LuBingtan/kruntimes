@@ -388,19 +388,36 @@ controller wiring 累积不必要的冲突。
       invalid input bindings 和 invalid Action output expressions；
   - [x] 增加 E2E 覆盖 inline `WorkflowRun`、reusable Workflow calls、Action calls、
     validation failures、output propagation 和 controller restart recovery。
-- [ ] Dashboard：设计并实现只读 web dashboard，类似 Tekton Dashboard，可以按
+- [x] Dashboard：设计并实现只读 web dashboard，类似 Tekton Dashboard，可以按
   namespace 查看 Runs，并检查状态和日志。
   初始实现 TODO：
   - [x] 增加只读 [Dashboard 设计文档](design/dashboard/)，覆盖 scope、architecture、
     RBAC、log access 和 implementation sequence；
-  - [ ] review 并定义 v0.x Kubernetes bearer-token login 模型、request-scoped Kubernetes
+  - [x] review 并定义 v0.x Kubernetes bearer-token login 模型、request-scoped Kubernetes
     clients，以及 local-only kubeconfig proxy 边界；
-  - 增加 dashboard backend，提供只读 Kubernetes API access；
-  - 实现 Run list/detail APIs，并遵守 namespace-aware RBAC；
-  - 通过 backend-controlled 路径代理 Run log tail/follow；
-  - 增加只读 frontend views，覆盖 namespace selection、Run lists、Run details、
-    conditions、outputs、artifact references 和 logs；
-  - 增加可选 Helm installation support 和 E2E smoke coverage。
+  - [x] 增加 dashboard backend，提供只读 Kubernetes API access；
+  - [x] 实现可 bookmark 的 Run list/detail APIs，并遵守 namespace-aware RBAC；
+  - [x] 通过 backend-controlled 路径代理 Run log tail/follow；
+  - [x] 增加 session-cookie login、默认的窄范围 public namespace/Run/Runtime/WorkflowRun-list access，
+    以及 light/dark/system theme selection；
+  - [x] 增加只读 frontend views，覆盖 namespace selection、可 bookmark 的 Run
+    lists/details/logs、Runtime pool/Pod views 以及 WorkflowRun DAG/job/step views；
+  - [ ] 将 WorkflowRun job dependencies 渲染为 GitHub Actions-style staged DAG，展示可见
+    edges、parallel branches、joins 和 status/result summaries；每个 job 使用可 bookmark 的
+    detail page，并提供可展开且自动加载 step logs 的视图；
+  - [x] 在 `kruntimes` chart 中增加可选 Helm installation support；
+  - [x] 在标准 E2E environment 中部署 Dashboard。
+  - [x] 通过 [Runtime Gateway Run-log API](design/runtime-gateway-log-api.zh.md) 统一
+    Dashboard 和 `krt logs`：
+    - [x] 增加 Gateway route、按 UID 过滤的有界 structured records，以及最小权限的
+      Gateway ServiceAccount `get pods/log`；
+    - [x] 将 Dashboard logs 迁移到 Gateway，并移除其 caller-scoped `pods/log` 路径；
+    - [x] 将 `krt logs` 迁移到 Gateway，并移除 Runtime-Pod `pods/portforward` 与 direct
+      `pods/log` 路径；
+    - [x] 支持 opt-in Gateway mTLS authorization，以使用 kubeconfig client certificate，
+      并提供显式的 development TLS-verification escape hatch；
+    - [x] 通过 E2E 证明 `get runs` 对 logs 已足够且仍然必需。
+    该 API 是普通 Gateway HTTP API，不是 Kubernetes aggregation API server。
 - [ ] 随着安装面逐步稳定，继续推进供应链、安全、兼容性和运维加固。
 
 ### 迈向 v1.0

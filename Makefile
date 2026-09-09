@@ -3,6 +3,7 @@ IMG_SCHEDULER ?= kruntimes-scheduler:latest
 IMG_CONTROLLER ?= kruntimes-controller:latest
 IMG_RUNTIMED ?= kruntimes-runtimed:latest
 IMG_GATEWAY ?= kruntimes-gateway:latest
+IMG_DASHBOARD ?= kruntimes-dashboard:latest
 IMG_BASH_RUNTIME ?= kruntimes-bash-runtime:latest
 IMG_PYTHON_RUNTIME ?= kruntimes-python-runtime:latest
 IMG_DIAGNOSIS_RUNTIME ?= kruntimes-diagnosis-runtime:latest
@@ -129,6 +130,7 @@ E2E_IMG_SCHEDULER ?= kruntimes-scheduler:$(E2E_IMAGE_TAG)
 E2E_IMG_CONTROLLER ?= kruntimes-controller:$(E2E_IMAGE_TAG)
 E2E_IMG_RUNTIMED ?= kruntimes-runtimed:$(E2E_IMAGE_TAG)
 E2E_IMG_GATEWAY ?= kruntimes-gateway:$(E2E_IMAGE_TAG)
+E2E_IMG_DASHBOARD ?= kruntimes-dashboard:$(E2E_IMAGE_TAG)
 E2E_IMG_BASH_RUNTIME ?= kruntimes-bash-runtime:$(E2E_IMAGE_TAG)
 E2E_IMG_PYTHON_RUNTIME ?= kruntimes-python-runtime:$(E2E_IMAGE_TAG)
 E2E_IMG_DIAGNOSIS_RUNTIME ?= kruntimes-diagnosis-runtime:$(E2E_IMAGE_TAG)
@@ -136,6 +138,7 @@ E2E_TEST ?=
 E2E_CERT_MANAGER ?= false
 E2E_GATEWAY_BOUNDS ?= false
 E2E_GATEWAY_HELM_ARGS ?=
+E2E_TEST_TIMEOUT ?= 20m
 CERT_MANAGER_VERSION ?= v1.21.1
 E2E_CERT_MANAGER_GATEWAY_TLS_SECRET ?= kruntimes-gateway-cert-manager-tls
 .PHONY: e2e-setup
@@ -143,6 +146,7 @@ e2e-setup: IMG_SCHEDULER = $(E2E_IMG_SCHEDULER)
 e2e-setup: IMG_CONTROLLER = $(E2E_IMG_CONTROLLER)
 e2e-setup: IMG_RUNTIMED = $(E2E_IMG_RUNTIMED)
 e2e-setup: IMG_GATEWAY = $(E2E_IMG_GATEWAY)
+e2e-setup: IMG_DASHBOARD = $(E2E_IMG_DASHBOARD)
 e2e-setup: IMG_BASH_RUNTIME = $(E2E_IMG_BASH_RUNTIME)
 e2e-setup: IMG_PYTHON_RUNTIME = $(E2E_IMG_PYTHON_RUNTIME)
 e2e-setup: IMG_DIAGNOSIS_RUNTIME = $(E2E_IMG_DIAGNOSIS_RUNTIME)
@@ -152,6 +156,7 @@ e2e-setup: manifests docker-build docker-build-diagnosis-runtime ## Create kind 
 	kind load docker-image $(E2E_IMG_CONTROLLER) --name $(KIND_CLUSTER_NAME)
 	kind load docker-image $(E2E_IMG_RUNTIMED) --name $(KIND_CLUSTER_NAME)
 	kind load docker-image $(E2E_IMG_GATEWAY) --name $(KIND_CLUSTER_NAME)
+	kind load docker-image $(E2E_IMG_DASHBOARD) --name $(KIND_CLUSTER_NAME)
 	kind load docker-image $(E2E_IMG_BASH_RUNTIME) --name $(KIND_CLUSTER_NAME)
 	kind load docker-image $(E2E_IMG_PYTHON_RUNTIME) --name $(KIND_CLUSTER_NAME)
 	kind load docker-image $(E2E_IMG_DIAGNOSIS_RUNTIME) --name $(KIND_CLUSTER_NAME)
@@ -164,7 +169,18 @@ e2e-setup: manifests docker-build docker-build-diagnosis-runtime ## Create kind 
 		--set gateway.enabled=true \
 		--set gateway.image=$(E2E_IMG_GATEWAY) \
 		--set gateway.protocols[0]=http --set gateway.protocols[1]=https \
+		--set dashboard.enabled=true \
+		--set dashboard.image=$(E2E_IMG_DASHBOARD) \
 		--namespace $(NAMESPACE) --create-namespace --wait --timeout 120s $(E2E_GATEWAY_HELM_ARGS)
+
+KIND_CLUSTER_NAME ?= kruntimes-e2e
+e2e-setup-runtimes:
+	kind load docker-image $(E2E_IMG_BASH_RUNTIME) --name $(KIND_CLUSTER_NAME)
+	kind load docker-image $(E2E_IMG_PYTHON_RUNTIME) --name $(KIND_CLUSTER_NAME)
+	$(HELM) upgrade --install kruntimes-runtimes ./charts/kruntimes-runtimes \
+		--set bash.image=$(E2E_IMG_BASH_RUNTIME) \
+		--set python.image=$(E2E_IMG_PYTHON_RUNTIME) \
+		--namespace $(NAMESPACE) --create-namespace --wait --timeout 120s
 
 .PHONY: e2e-test
 e2e-test: generate ## Run E2E tests against the kind cluster.
@@ -174,7 +190,7 @@ e2e-test: generate ## Run E2E tests against the kind cluster.
 	KRUNTIMES_RUNTIMED_IMAGE=$(E2E_IMG_RUNTIMED) \
 	KRUNTIMES_E2E_CERT_MANAGER=$(E2E_CERT_MANAGER) \
 	KRUNTIMES_E2E_GATEWAY_BOUNDS=$(E2E_GATEWAY_BOUNDS) \
-	go test ./test/e2e/... -v -count=1 -failfast $(if $(E2E_TEST),-run '$(E2E_TEST)')
+	go test ./test/e2e/... -v -count=1 -failfast -timeout $(E2E_TEST_TIMEOUT) $(if $(E2E_TEST),-run '$(E2E_TEST)')
 
 .PHONY: e2e
 e2e: E2E_IMAGE_TAG := $(E2E_RUN_IMAGE_TAG)
@@ -239,13 +255,18 @@ benchmark-run: ## Run the benchmark against the current Kubernetes context. Pass
 ##@ Build
 
 .PHONY: build
-build: generate proto ## Build all binaries.
+build: generate proto dashboard-ui-build ## Build all binaries.
 	go build -o bin/scheduler ./cmd/scheduler
 	go build -o bin/runtimed ./cmd/runtimed
 	go build -o bin/controller ./cmd/controller
 	go build -o bin/runtime-gateway ./cmd/runtime-gateway
+	go build -o bin/dashboard ./dashboard/cmd
 	go build -o bin/krt ./cmd/krt
 	go build -o bin/bash-runtime ./runtimes/bash/cmd
+
+.PHONY: dashboard-ui-build
+dashboard-ui-build: ## Build the React Dashboard frontend assets.
+	cd dashboard/frontend && npm ci && npm run build
 
 .PHONY: build-scheduler
 build-scheduler: generate ## Build scheduler binary.
@@ -278,7 +299,7 @@ run-runtimed: generate manifests proto ## Run runtimed locally (requires kubecon
 ##@ Docker
 
 .PHONY: docker-build
-docker-build: docker-build-scheduler docker-build-controller docker-build-runtimed docker-build-gateway docker-build-bash-runtime docker-build-python-runtime ## Build all Docker images.
+docker-build: docker-build-scheduler docker-build-controller docker-build-runtimed docker-build-gateway docker-build-dashboard docker-build-bash-runtime docker-build-python-runtime ## Build all Docker images.
 
 .PHONY: docker-build-scheduler
 docker-build-scheduler: generate ## Build scheduler Docker image.
@@ -295,6 +316,10 @@ docker-build-runtimed: generate proto ## Build runtimed Docker image.
 .PHONY: docker-build-gateway
 docker-build-gateway: generate proto ## Build Runtime gateway Docker image.
 	$(CONTAINER_TOOL) build -t $(IMG_GATEWAY) -f Dockerfile.gateway .
+
+.PHONY: docker-build-dashboard
+docker-build-dashboard: generate ## Build Dashboard Docker image.
+	$(CONTAINER_TOOL) build -t $(IMG_DASHBOARD) -f dashboard/Dockerfile .
 
 .PHONY: docker-build-bash-runtime
 docker-build-bash-runtime: proto ## Build bash-runtime Docker image.
@@ -317,6 +342,7 @@ docker-push: ## Push Docker images.
 	$(CONTAINER_TOOL) push $(IMG_CONTROLLER)
 	$(CONTAINER_TOOL) push $(IMG_RUNTIMED)
 	$(CONTAINER_TOOL) push $(IMG_GATEWAY)
+	$(CONTAINER_TOOL) push $(IMG_DASHBOARD)
 	$(CONTAINER_TOOL) push $(IMG_BASH_RUNTIME)
 	$(CONTAINER_TOOL) push $(IMG_PYTHON_RUNTIME)
 
@@ -333,6 +359,7 @@ test-helm: manifests ## Validate Helm charts and multi-release rendering.
 	$(HELM) template kruntimes-runtimes ./charts/kruntimes-runtimes --namespace default
 	./hack/verify-helm-multi-release.py
 	./hack/verify-helm-images.py
+	./hack/verify-dashboard-helm.py
 	./hack/verify-helm-multi-namespace.py
 	./hack/verify-helm-metrics.py
 	./hack/verify-helm-config-values.py

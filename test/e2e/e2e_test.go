@@ -786,6 +786,174 @@ func TestSessionGatewayExecutesAuthorizedOperation(t *testing.T) {
 	_ = waitForGatewayResponse(t, http.MethodGet, baseURL, token, nil, http.StatusConflict)
 }
 
+func TestGatewayServesAuthorizedRunLogs(t *testing.T) {
+	runtimeName := fmt.Sprintf("run-logs-%d", time.Now().UnixNano())
+	ensureRuntimeWithRunsCapacity(t, runtimeName, bashRuntimeImage(), 9091, 1)
+
+	run := &v1alpha1.Run{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "e2e-run-logs-", Namespace: testNamespace},
+		Spec: v1alpha1.RunSpec{
+			Runtime: runtimeName,
+			Mode:    v1alpha1.RunMode{Session: &v1alpha1.RunSessionMode{}},
+		},
+	}
+	if err := k8sClient.Create(t.Context(), run); err != nil {
+		t.Fatalf("create Session Run: %v", err)
+	}
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), run) })
+	waitForRunPhase(t, run, 30*time.Second, v1alpha1.RunReady)
+
+	baseURL := gatewayEndpointURL(t, waitForGatewayPod(t), run.Status.Endpoint.URL)
+	token := sessionGatewayToken(t, run)
+	marker := "gateway-run-log-e2e"
+	_ = waitForGatewayResponse(t, http.MethodPost, baseURL+"/operations:execute", token,
+		[]byte(`{"command":{"argv":["sh","-c","printf gateway-run-log-e2e"]}}`), http.StatusOK)
+	waitForSessionCommandLogs(t, run, marker)
+	requestRunCancel(t, run)
+	waitForRunPhase(t, run, 20*time.Second, v1alpha1.RunCancelled)
+
+	// A Runtime Pod's logs are shared. Emit more than the former global source
+	// tail through a later Run on the same Pod; the first Run's retained logs
+	// must remain discoverable after it has released the Runtime slot.
+	noisyRun := &v1alpha1.Run{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "e2e-run-log-noise-", Namespace: testNamespace},
+		Spec:       v1alpha1.RunSpec{Runtime: runtimeName, Mode: v1alpha1.RunMode{Session: &v1alpha1.RunSessionMode{}}},
+	}
+	if err := k8sClient.Create(t.Context(), noisyRun); err != nil {
+		t.Fatalf("create noisy Session Run: %v", err)
+	}
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), noisyRun) })
+	waitForRunPhase(t, noisyRun, 30*time.Second, v1alpha1.RunReady)
+	noisyBaseURL := gatewayEndpointURL(t, waitForGatewayPod(t), noisyRun.Status.Endpoint.URL)
+	noisyToken := sessionGatewayToken(t, noisyRun)
+	for range 55 {
+		_ = waitForGatewayResponse(t, http.MethodPost, noisyBaseURL+"/operations:execute", noisyToken,
+			[]byte(`{"command":{"argv":["sh","-c","printf gateway-run-log-noise"]}}`), http.StatusOK)
+	}
+	waitForSessionCommandLogs(t, noisyRun, "gateway-run-log-noise")
+
+	logURL := gatewayRunLogsURL(t, baseURL, run)
+	_ = waitForGatewayResponse(t, http.MethodGet, logURL, sessionGatewayTokenWithoutRunAccess(t), nil, http.StatusForbidden)
+
+	entries := waitForGatewayRunLogEntries(t, logURL, token, marker)
+	if !hasGatewayRunLogEntry(entries, "stdout", marker) || !hasGatewayRunLogEntry(entries, "audit", "session operation completed") {
+		t.Fatalf("snapshot Run logs = %#v, want stdout and audit records", entries)
+	}
+	// The CLI uses the same external Gateway contract. Its token has get only on
+	// this Run: it deliberately has neither Pod discovery, pods/log, nor
+	// pods/portforward permission.
+	cliGatewayURL, err := url.Parse(baseURL)
+	if err != nil {
+		t.Fatalf("parse Gateway URL for krt logs: %v", err)
+	}
+	cliGatewayURL.Path = ""
+	cliGatewayURL.RawPath = ""
+	cliGatewayURL.RawQuery = ""
+	cmd := krt.NewRootCmd()
+	var cliStdout, cliStderr bytes.Buffer
+	cmd.SetOut(&cliStdout)
+	cmd.SetErr(&cliStderr)
+	cmd.SetArgs([]string{"logs", run.Name, "--namespace", testNamespace, "--token", token, "--gateway-url", cliGatewayURL.String(), "--tail", "100"})
+	if err := cmd.ExecuteContext(t.Context()); err != nil {
+		t.Fatalf("krt logs through Gateway: %v\\nstderr: %s", err, cliStderr.String())
+	}
+	if !strings.Contains(cliStdout.String(), marker) {
+		t.Fatalf("krt logs stdout = %q, want %q", cliStdout.String(), marker)
+	}
+
+	followEntries := followGatewayRunLogs(t, logURL+"?tailLines=100&follow=true", token, marker)
+	if !hasGatewayRunLogEntry(followEntries, "stdout", marker) {
+		t.Fatalf("follow Run logs = %#v, want stdout record", followEntries)
+	}
+}
+
+type gatewayRunLogEntry struct {
+	Stream    string `json:"stream"`
+	Message   string `json:"message"`
+	Operation string `json:"operation"`
+	Outcome   string `json:"outcome"`
+}
+
+func gatewayRunLogsURL(t *testing.T, gatewayURL string, run *v1alpha1.Run) string {
+	t.Helper()
+	parsed, err := url.Parse(gatewayURL)
+	if err != nil {
+		t.Fatalf("parse gateway URL %q: %v", gatewayURL, err)
+	}
+	return fmt.Sprintf("%s://%s/v1/namespaces/%s/runtimes/%s/runs/%s/logs", parsed.Scheme, parsed.Host,
+		url.PathEscape(run.Namespace), url.PathEscape(run.Spec.Runtime), url.PathEscape(string(run.UID)))
+}
+
+func waitForGatewayRunLogEntries(t *testing.T, logURL, token, marker string) []gatewayRunLogEntry {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	for {
+		contents, err := gatewayRequest(ctx, http.MethodGet, logURL, token, nil, http.StatusOK)
+		if err == nil {
+			var response struct {
+				Items []gatewayRunLogEntry `json:"items"`
+			}
+			if decodeErr := json.Unmarshal(contents, &response); decodeErr != nil {
+				t.Fatalf("decode Gateway Run logs: %v", decodeErr)
+			}
+			if hasGatewayRunLogEntry(response.Items, "stdout", marker) {
+				return response.Items
+			}
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for Gateway Run log %q: %v", marker, err)
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
+func followGatewayRunLogs(t *testing.T, logURL, token, marker string) []gatewayRunLogEntry {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, logURL, nil)
+	if err != nil {
+		t.Fatalf("create Gateway Run log follow request: %v", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("send Gateway Run log follow request: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		contents, _ := io.ReadAll(response.Body)
+		t.Fatalf("Gateway Run log follow status = %d, want %d: %s", response.StatusCode, http.StatusOK, contents)
+	}
+	if contentType := response.Header.Get("Content-Type"); contentType != "application/x-ndjson" {
+		t.Fatalf("Gateway Run log follow Content-Type = %q, want application/x-ndjson", contentType)
+	}
+
+	decoder := json.NewDecoder(response.Body)
+	var entries []gatewayRunLogEntry
+	for {
+		var entry gatewayRunLogEntry
+		if err := decoder.Decode(&entry); err != nil {
+			t.Fatalf("decode Gateway Run log follow record: %v", err)
+		}
+		entries = append(entries, entry)
+		if entry.Stream == "stdout" && entry.Message == marker {
+			return entries
+		}
+	}
+}
+
+func hasGatewayRunLogEntry(entries []gatewayRunLogEntry, stream, message string) bool {
+	for _, entry := range entries {
+		if entry.Stream == stream && entry.Message == message {
+			return true
+		}
+	}
+	return false
+}
+
 func TestFunctionGatewayInvokesAuthorizedFunction(t *testing.T) {
 	runtimeName := fmt.Sprintf("function-gateway-%d", time.Now().UnixNano())
 	ensureRuntimeWithRunsCapacity(t, runtimeName, pythonRuntimeImage(), 9092, 1)

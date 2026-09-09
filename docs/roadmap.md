@@ -464,21 +464,42 @@ wiring from accumulating avoidable conflicts.
   - [x] add E2E coverage for inline `WorkflowRun`, reusable Workflow calls, Action
     calls, validation failures, output propagation, and controller restart
     recovery.
-- [ ] Dashboard: design and build a read-only web dashboard, similar in spirit
+- [x] Dashboard: design and build a read-only web dashboard, similar in spirit
   to Tekton Dashboard, that can browse Runs by namespace and inspect status and
   logs.
   Initial implementation TODO:
   - [x] add a read-only [Dashboard design document](design/dashboard/) covering
     scope, architecture, RBAC, log access, and implementation sequence;
-  - [ ] review and define the v0.x Kubernetes bearer-token login model,
+  - [x] review and define the v0.x Kubernetes bearer-token login model,
     request-scoped Kubernetes clients, and the local-only kubeconfig proxy
     boundary;
-  - add a dashboard backend with read-only Kubernetes API access;
-  - implement Run list/detail APIs with namespace-aware RBAC;
-  - proxy Run log tail/follow through a backend-controlled path;
-  - add read-only frontend views for namespace selection, Run lists, Run
-    details, conditions, outputs, artifact references, and logs;
-  - add optional Helm installation support and E2E smoke coverage.
+  - [x] add a dashboard backend with read-only Kubernetes API access;
+  - [x] implement bookmarkable Run list/detail APIs with namespace-aware RBAC;
+  - [x] proxy Run log tail/follow through a backend-controlled path;
+  - [x] add session-cookie login, default narrow public namespace/Run/Runtime/WorkflowRun-list access,
+    and light/dark/system theme selection;
+  - [x] add read-only frontend views for namespace selection, bookmarkable Run
+    lists/details/logs, Runtime pool and Pod views, and WorkflowRun DAG/job/step
+    views;
+  - [ ] render WorkflowRun job dependencies as a GitHub Actions-style staged
+    DAG with visible edges, parallel branches, joins, and status/result
+    summaries; move each job to a bookmarkable detail page with expandable,
+    automatically loaded step logs;
+  - [x] add optional Helm installation support in the `kruntimes` chart;
+  - [x] deploy the Dashboard in the standard E2E environment.
+  - [x] unify Dashboard and `krt logs` behind the [Runtime Gateway Run-log
+    API](design/runtime-gateway-log-api.md):
+    - [x] add the Gateway route, UID-filtered bounded structured records, and
+      least-privilege Gateway ServiceAccount `get pods/log` permission;
+    - [x] migrate Dashboard logs to the Gateway and remove its caller-scoped
+      `pods/log` path;
+    - [x] migrate `krt logs` to the Gateway and remove Runtime-Pod
+      `pods/portforward` and direct `pods/log` paths;
+    - [x] support opt-in Gateway mTLS authorization for kubeconfig client
+      certificates and an explicit development TLS-verification escape hatch;
+    - [x] prove in E2E that `get runs` is sufficient for logs and is required.
+    This remains an ordinary Gateway HTTP API, not a Kubernetes aggregation
+    API server.
 - [ ] Continue supply-chain, security, compatibility, and operational
   hardening as the installation surface stabilizes.
 

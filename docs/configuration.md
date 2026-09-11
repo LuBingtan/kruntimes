@@ -78,6 +78,11 @@ authentication, including client certificates, is verified by the Kubernetes
 API server. The caller needs both exact `get` on the Run and `get` on the
 `logs.kruntimes.io` `runs/log` subresource; it never needs `pods/log`.
 
+The APIService is cluster-scoped, so a cluster can have one aggregated log API
+backend for this API group/version. When installing a second kruntimes platform
+release in the same cluster, retain `logAPI.enabled: true` for the release that
+owns the API and set it to `false` for every other release.
+
 ```yaml
 logAPI:
   enabled: true

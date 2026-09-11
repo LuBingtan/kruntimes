@@ -76,6 +76,10 @@ transport：普通 kubeconfig authentication（包括 client certificate）由 K
 caller 需要目标 Run 的 exact `get`，以及 `logs.kruntimes.io` `runs/log` subresource 的 `get`；不需要
 `pods/log`。
 
+该 APIService 是 cluster-scoped，因此同一集群中一个 API group/version 只能有一个聚合
+Run-log API backend。若在同一集群安装第二个 kruntimes platform release，应保留拥有该 API
+的 release 的 `logAPI.enabled: true`，并将其它 release 设为 `false`。
+
 ```yaml
 logAPI:
   enabled: true
